@@ -36,6 +36,7 @@ export default function AddStudent() {
   const [created, setCreated] = useState(null);
   const [allocationResult, setAllocationResult] = useState(null);
   const [uploadNotes, setUploadNotes] = useState([]);
+  const [credentialsCopied, setCredentialsCopied] = useState(false);
 
   const [photoBlob, setPhotoBlob] = useState(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState(null);
@@ -205,17 +206,32 @@ export default function AddStudent() {
     window.print();
   }
 
+  function copyCredentials() {
+    const text = `Login ID: ${created.student.student_id}\nPassword: ${created.temporaryPassword}`;
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+    setCredentialsCopied(true);
+    setTimeout(() => setCredentialsCopied(false), 1500);
+  }
+
   if (created) {
     const currentFloor = floors.find((f) => f.floor_id === floorId);
     return (
       <div className="card" style={{ maxWidth: 480 }} id="student-created-card">
         <h2>{t('students.created')}</h2>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
+          The student uses these to log in to the student portal.
+        </p>
         <p>
-          <strong>Student ID:</strong> {created.student.student_id}
+          <strong>Login ID:</strong> {created.student.student_id}
         </p>
         <p>
           <strong>{t('students.tempPassword')}:</strong> {created.temporaryPassword}
         </p>
+        <button className="btn btn-outline" onClick={copyCredentials} style={{ marginBottom: 8 }}>
+          {credentialsCopied ? 'Copied!' : 'Copy login ID & password'}
+        </button>
         {allocationResult && (
           <>
             <p>

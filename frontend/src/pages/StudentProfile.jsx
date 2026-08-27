@@ -38,6 +38,8 @@ export default function StudentProfile() {
   const [showCamera, setShowCamera] = useState(false);
   const [endingAllocation, setEndingAllocation] = useState(null);
   const [showAddVacation, setShowAddVacation] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [copiedField, setCopiedField] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,10 +79,18 @@ export default function StudentProfile() {
     if (!window.confirm('Generate a new password for this student? The old one will stop working.')) return;
     try {
       const res = await api.post(`/students/${id}/reset-password`);
-      setNotice(`New password: ${res.data.newPassword} (shown once — share it with the student now)`);
+      setNewPassword(res.data.newPassword);
     } catch (err) {
       setNotice(apiErrorMessage(err));
     }
+  }
+
+  function copyToClipboard(text, field) {
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(text).catch(() => {});
+    }
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(''), 1500);
   }
 
   async function deactivate() {
@@ -149,6 +159,45 @@ export default function StudentProfile() {
         </div>
       )}
 
+      <div className="card" style={{ marginBottom: 16 }}>
+        <h3 style={{ marginTop: 0 }}>Login details</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          The student logs in to the student portal with their Student ID as the login ID and a password.
+        </p>
+        <div className="list-item">
+          <div>
+            <span style={{ color: 'var(--color-ink-soft)' }}>Login ID</span>
+            <div style={{ fontSize: 18, fontWeight: 600 }}>{student.student_id}</div>
+          </div>
+          <button className="btn btn-outline" onClick={() => copyToClipboard(student.student_id, 'id')}>
+            {copiedField === 'id' ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+        {newPassword ? (
+          <div className="list-item" style={{ background: 'var(--color-success-soft)', borderRadius: 8, marginTop: 8 }}>
+            <div>
+              <span style={{ color: 'var(--color-ink-soft)' }}>New password</span>
+              <div style={{ fontSize: 18, fontWeight: 600 }}>{newPassword}</div>
+              <div style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>
+                Shown only once — share it with the student now. It cannot be viewed again after you leave this page.
+              </div>
+            </div>
+            <button className="btn btn-outline" onClick={() => copyToClipboard(newPassword, 'password')}>
+              {copiedField === 'password' ? 'Copied!' : 'Copy'}
+            </button>
+          </div>
+        ) : (
+          <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 8 }}>
+            Passwords are stored securely and can't be viewed after creation. To find out (or set) a student's password, generate a new one below and share it with them.
+          </p>
+        )}
+        <div style={{ marginTop: 12 }}>
+          <button className="btn btn-primary" onClick={resetPassword}>
+            {newPassword ? 'Generate another password' : 'Generate / view password'}
+          </button>
+        </div>
+      </div>
+
       <div className="card-grid cols-2">
         <div className="card">
           <h3>Profile</h3>
@@ -163,9 +212,6 @@ export default function StudentProfile() {
             </button>
             <button className="btn btn-outline" onClick={() => setShowSignaturePad((v) => !v)}>
               {student.signature_drive_file_id ? 'Retake signature' : 'Capture signature'}
-            </button>
-            <button className="btn btn-outline" onClick={resetPassword}>
-              Reset password
             </button>
             {student.status === 'active' && (
               <button className="btn btn-danger" onClick={deactivate}>
