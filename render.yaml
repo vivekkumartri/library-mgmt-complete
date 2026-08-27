@@ -1,0 +1,83 @@
+services:
+  # ---- Backend API (Express) ----
+  - type: web
+    name: library-mgmt-backend
+    runtime: node
+    plan: starter
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 4000
+      - key: FRONTEND_URL
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: SESSION_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
+        sync: false
+      - key: STUDENT_ID_PREFIX
+        value: LIB
+      - key: RECEIPT_PREFIX
+        value: RCPT
+      - key: DEFAULT_CURRENCY
+        value: INR
+      # Backups run via the separate cron job below, not in-process, so a
+      # sleeping/restarting web service can't cause a missed backup.
+      - key: BACKUP_ENABLED
+        value: "false"
+
+  # ---- Frontend (static site) ----
+  - type: web
+    name: library-mgmt-frontend
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        sync: false # set to https://<library-mgmt-backend>.onrender.com/api
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # ---- Scheduled backup (section 45) ----
+  # A dedicated Cron Job rather than in-process node-cron: it runs on its
+  # own schedule independent of the web service's uptime, so a sleeping
+  # starter-plan web dyno never causes a missed backup.
+  - type: cron
+    name: library-mgmt-backup
+    runtime: node
+    rootDir: backend
+    schedule: "0 2 * * *" # daily at 02:00 UTC
+    buildCommand: npm install
+    startCommand: node scripts/runBackup.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: GOOGLE_PROJECT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_EMAIL
+        sync: false
+      - key: GOOGLE_PRIVATE_KEY
+        sync: false
+      - key: GOOGLE_SPREADSHEET_ID
+        sync: false
+      - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
+        sync: false
