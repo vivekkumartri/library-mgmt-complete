@@ -58,14 +58,40 @@ describe('Settings — editing a floor', () => {
     );
   });
 
-  test('does not offer to change rows/columns — only a note explaining why', async () => {
+  test('grows the grid via PATCH /floors/:id/resize', async () => {
     mockBaseGets();
+    api.patch.mockResolvedValueOnce({ data: { floor: { ...floor, rows: 6, columns: 10 }, seatsAdded: 10, seatsRemoved: 0 } });
+
     render(<Settings />);
     await waitFor(() => expect(screen.getByText('Floor 1')).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => expect(screen.getByText('Edit floor')).toBeInTheDocument());
 
-    expect(screen.getByText(/seat grid size can't be changed here/i)).toBeInTheDocument();
+    const rowsInput = screen.getByTestId('resize-rows');
+    fireEvent.change(rowsInput, { target: { value: '6' } });
+    fireEvent.click(screen.getByText('Resize grid'));
+
+    await waitFor(() =>
+      expect(api.patch).toHaveBeenCalledWith('/floors/floor-1/resize', { rows: 6, columns: 10 })
+    );
+    await waitFor(() => expect(screen.getByText('Added 10 seat(s).')).toBeInTheDocument());
+  });
+
+  test('shrinking asks for confirmation first', async () => {
+    mockBaseGets();
+    window.confirm = vi.fn(() => false);
+
+    render(<Settings />);
+    await waitFor(() => expect(screen.getByText('Floor 1')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Edit'));
+    await waitFor(() => expect(screen.getByText('Edit floor')).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId('resize-columns'), { target: { value: '5' } });
+    fireEvent.click(screen.getByText('Resize grid'));
+
+    await waitFor(() => expect(window.confirm).toHaveBeenCalled());
+    expect(api.patch).not.toHaveBeenCalledWith('/floors/floor-1/resize', expect.anything());
   });
 });

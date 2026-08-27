@@ -77,6 +77,19 @@ export default function Settings() {
     load();
   }, [load]);
 
+  // Unlike load(), this doesn't flip the page-wide `loading` flag — used to
+  // refresh the floors list in the background (e.g. after a grid resize)
+  // without unmounting whatever's currently open, like the edit drawer.
+  const refreshFloors = useCallback(async () => {
+    try {
+      const f = await api.get('/floors');
+      setFloors(f.data.floors);
+    } catch {
+      // Silent — the resize itself already reported success/failure; this
+      // is just a best-effort background refresh of the floor list.
+    }
+  }, []);
+
   function set(key, value) {
     setSettings((s) => ({ ...s, [key]: value }));
   }
@@ -327,6 +340,7 @@ export default function Settings() {
           floor={editingFloor}
           onClose={() => setEditingFloor(null)}
           onDone={() => { setEditingFloor(null); load(); }}
+          onResized={refreshFloors}
         />
       )}
 
@@ -746,15 +760,14 @@ function FloorFormDrawer({ onClose, onDone }) {
 }
 
 /**
- * Edits a floor's name, hours, notes and active/inactive status. Rows and
- * columns are deliberately NOT editable here — the seat grid is generated
- * once from them at creation time (section 7/8), and resizing it later
- * would mean adding or removing real Seats rows, some of which may already
- * have allocation/billing history attached. That's a bigger, riskier
- * operation than a simple field edit, so for now it isn't offered through
- * this drawer; add a new floor instead if the seat count needs to change.
+ * Edits a floor's name, hours, notes and active/inactive status, and — via
+ * a separate "Resize grid" action — its rows/columns. Resizing is split
+ * from the plain field save because it has real side effects on Seats
+ * (creating new seats, or removing empty ones at the end of the grid); it
+ * hits a dedicated backend endpoint that refuses to shrink past a seat
+ * that's currently allocated.
  */
-function EditFloorDrawer({ floor, onClose, onDone }) {
+function EditFloorDrawer({ floor, onClose, onDone, onResized }) {
   const [floorName, setFloorName] = useState(floor.floor_name);
   const [openingTime, setOpeningTime] = useState(floor.opening_time || '');
   const [closingTime, setClosingTime] = useState(floor.closing_time || '');
@@ -762,6 +775,12 @@ function EditFloorDrawer({ floor, onClose, onDone }) {
   const [notes, setNotes] = useState(floor.notes || '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+
+  const [rows, setRows] = useState(String(floor.rows));
+  const [columns, setColumns] = useState(String(floor.columns));
+  const [resizeError, setResizeError] = useState('');
+  const [resizeNotice, setResizeNotice] = useState('');
+  const [resizing, setResizing] = useState(false);
 
   async function submit() {
     if (!floorName) {
@@ -786,6 +805,45 @@ function EditFloorDrawer({ floor, onClose, onDone }) {
     }
   }
 
+  async function resize() {
+    const newRows = Number(rows);
+    const newColumns = Number(columns);
+    if (!newRows || !newColumns) {
+      setResizeError('Rows and columns are both required.');
+      return;
+    }
+    const newTotal = newRows * newColumns;
+    const currentTotal = floor.rows * floor.columns;
+    if (newTotal === currentTotal) {
+      setResizeError('That is the same seat count as now — nothing to change.');
+      return;
+    }
+    if (newTotal < currentTotal) {
+      const shrink = window.confirm(
+        `This will shrink the grid from ${currentTotal} seats to ${newTotal}, removing seats numbered ${newTotal + 1}–${currentTotal}. ` +
+          'Any of those seats with an active or scheduled allocation will block the resize. Continue?'
+      );
+      if (!shrink) return;
+    }
+    setResizing(true);
+    setResizeError('');
+    setResizeNotice('');
+    try {
+      const res = await api.patch(`/floors/${floor.floor_id}/resize`, { rows: newRows, columns: newColumns });
+      setResizeNotice(
+        res.data.seatsAdded > 0 ? `Added ${res.data.seatsAdded} seat(s).` : `Removed ${res.data.seatsRemoved} seat(s).`
+      );
+      // Refresh the floors list in the background (grid totals, etc.) but
+      // keep the drawer open so the admin actually sees the notice above —
+      // unlike onDone(), this does not close the drawer.
+      onResized?.();
+    } catch (err) {
+      setResizeError(apiErrorMessage(err, 'Unable to resize the grid.'));
+    } finally {
+      setResizing(false);
+    }
+  }
+
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
@@ -794,10 +852,6 @@ function EditFloorDrawer({ floor, onClose, onDone }) {
           <label>Floor name</label>
           <input className="input" value={floorName} onChange={(e) => setFloorName(e.target.value)} />
         </div>
-        <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>
-          {floor.rows} × {floor.columns} = {floor.rows * floor.columns} seats — the seat grid size can't be changed here; add a
-          new floor if you need a different layout.
-        </p>
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="field" style={{ flex: 1 }}>
             <label>Opening time</label>
@@ -828,6 +882,32 @@ function EditFloorDrawer({ floor, onClose, onDone }) {
             Cancel
           </button>
         </div>
+
+        <hr style={{ margin: '20px 0' }} />
+
+        <h4 style={{ marginBottom: 4 }}>Resize seat grid</h4>
+        <p style={{ fontSize: 12, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          Currently {floor.rows} × {floor.columns} = {floor.rows * floor.columns} seats. Growing adds new empty seats at the
+          end; shrinking removes seats from the end and is blocked if any of them are currently allocated.
+        </p>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Rows</label>
+            <input className="input" type="number" data-testid="resize-rows" value={rows} onChange={(e) => setRows(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Columns</label>
+            <input className="input" type="number" data-testid="resize-columns" value={columns} onChange={(e) => setColumns(e.target.value)} />
+          </div>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>
+          New total: {Number(rows || 0) * Number(columns || 0)} seats.
+        </p>
+        {resizeError && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{resizeError}</p>}
+        {resizeNotice && <p style={{ color: 'var(--color-success)', fontSize: 13 }}>{resizeNotice}</p>}
+        <button className="btn btn-outline" disabled={resizing} onClick={resize}>
+          {resizing ? 'Resizing…' : 'Resize grid'}
+        </button>
       </div>
     </div>
   );
