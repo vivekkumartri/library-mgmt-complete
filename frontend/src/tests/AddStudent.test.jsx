@@ -115,7 +115,7 @@ describe('AddStudent wizard', () => {
     expect(api.post).toHaveBeenCalledWith('/students', expect.objectContaining({ fullName: 'Rahul Kumar', mobile: '9999999999' }));
   });
 
-  test('shows the signature capture step after creation when skipped in-wizard, then reveals next-step actions once done', async () => {
+  test('shows next-step actions right after creation, without a redundant re-capture-signature prompt', async () => {
     api.post.mockResolvedValueOnce({
       data: { student: { student_id: 'LIB-2026-0042' }, temporaryPassword: 'Xy7pQ2mN' },
     });
@@ -128,13 +128,11 @@ describe('AddStudent wizard', () => {
     skipToReview();
     fireEvent.click(screen.getByText('Create student'));
 
-    await waitFor(() => expect(screen.getByText('Mock save signature')).toBeInTheDocument());
-    expect(screen.queryByText('Go to student profile')).not.toBeInTheDocument();
-
-    fireEvent.click(screen.getByText('Mock save signature'));
-
-    expect(screen.getByText('Go to student profile')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Go to student profile')).toBeInTheDocument());
     expect(screen.getByText('Allocate a seat')).toBeInTheDocument();
+    // The in-wizard Signature step already offered this — no second capture
+    // prompt should reappear on the created-student screen.
+    expect(screen.queryByText('Mock save signature')).not.toBeInTheDocument();
   });
 
   test('surfaces a backend error without losing the entered data', async () => {

@@ -41,7 +41,6 @@ export default function AddStudent() {
   const [photoBlob, setPhotoBlob] = useState(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState(null);
   const [signatureBlob, setSignatureBlob] = useState(null);
-  const [signatureSaved, setSignatureSaved] = useState(false);
 
   // Seat allocation is optional at creation time — admin can always
   // allocate later from the seat map. When they do pick a seat here, the
@@ -256,30 +255,19 @@ export default function AddStudent() {
           </div>
         )}
 
-        {!signatureBlob && !signatureSaved ? (
-          <div style={{ marginTop: 16 }}>
-            <h4 style={{ marginBottom: 4 }}>Capture signature</h4>
-            <SignaturePad
-              studentId={created.student.student_id}
-              onSaved={() => setSignatureSaved(true)}
-              onCancel={() => setSignatureSaved(true)}
-            />
-          </div>
-        ) : (
-          <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-            <button className="btn btn-outline" onClick={printCredentials}>
-              Print / download
+        <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline" onClick={printCredentials}>
+            Print / download
+          </button>
+          <button className="btn btn-primary" onClick={() => navigate(`/students/${created.student.student_id}`)}>
+            Go to student profile
+          </button>
+          {!allocationResult && (
+            <button className="btn btn-outline" onClick={() => navigate('/seats')}>
+              Allocate a seat
             </button>
-            <button className="btn btn-primary" onClick={() => navigate(`/students/${created.student.student_id}`)}>
-              Go to student profile
-            </button>
-            {!allocationResult && (
-              <button className="btn btn-outline" onClick={() => navigate('/seats')}>
-                Allocate a seat
-              </button>
-            )}
-          </div>
-        )}
+          )}
+        </div>
       </div>
     );
   }
