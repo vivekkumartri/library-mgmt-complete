@@ -257,67 +257,81 @@ export default function SeatMap() {
               <p style={{ color: 'var(--color-ink-soft)', margin: 0 }}>{t('common.noResults')}</p>
             ) : (
               <div
-                className="seat-grid"
+                className="seat-map-rows"
                 style={{
-                  '--cols': currentFloor?.columns || 4,
                   transform: `scale(${zoom})`,
                   transformOrigin: 'top left',
                   width: zoom > 1 ? `${100 / zoom}%` : '100%',
                 }}
               >
-                {visibleSeats.map((seat) => {
-                  const status = seatStatusClass(seat);
-                  const urgency = seatPaymentUrgency(seat);
-                  const colorCls = seatColorClass(seat);
-                  const dueDate = seatDueDate(seat);
-                  const timeline = seat.timeline || [];
-                  // Quick-mark only makes sense when there's exactly one
-                  // student on this seat right now — with more than one
-                  // (a shared/partial seat) it's ambiguous which student
-                  // "Present" would apply to, so those still go through
-                  // the seat detail drawer instead.
-                  const soleOccupant = timeline.length === 1 ? timeline[0] : null;
-                  const label =
-                    status === 'occupied' || status === 'partial'
-                      ? `Seat ${seat.seat_number}, ${status}${urgency !== 'ok' ? `, payment ${urgency.replace('_', ' ')}` : ''}`
-                      : `Seat ${seat.seat_number}, ${status}`;
-                  return (
-                    <div key={seat.seat_id} className={`seat-cell ${colorCls}${timeline.length > 0 ? ' has-occupant' : ''}`} title={label}>
-                      <button type="button" className="seat-number-btn" onClick={() => setSelectedSeat(seat)} aria-label={label}>
-                        {seat.seat_number}
-                      </button>
-                      {timeline.length > 0 && (
-                        <>
-                          <div className="seat-due-date">{dueDate ? `Due ${dueDate}` : 'No dues'}</div>
-                          {soleOccupant ? (
-                            <div className="seat-quick-attendance">
-                              <button
-                                type="button"
-                                className={`seat-quick-btn ${attendanceMarks[soleOccupant.studentId] === 'present' ? 'is-present' : ''}`}
-                                disabled={quickBusyId === soleOccupant.studentId}
-                                onClick={(e) => { e.stopPropagation(); markQuickAttendance(soleOccupant.studentId, 'present'); }}
-                                title={`Mark ${soleOccupant.studentName || soleOccupant.studentId} present today`}
-                              >
-                                {t('attendance.present')}
-                              </button>
-                              <button
-                                type="button"
-                                className={`seat-quick-btn ${attendanceMarks[soleOccupant.studentId] === 'absent' ? 'is-absent' : ''}`}
-                                disabled={quickBusyId === soleOccupant.studentId}
-                                onClick={(e) => { e.stopPropagation(); markQuickAttendance(soleOccupant.studentId, 'absent'); }}
-                                title={`Mark ${soleOccupant.studentName || soleOccupant.studentId} absent today`}
-                              >
-                                {t('attendance.absent')}
-                              </button>
-                            </div>
-                          ) : (
-                            <div className="seat-quick-note">{timeline.length} students</div>
-                          )}
-                        </>
-                      )}
+                {Object.entries(
+                  visibleSeats.reduce((byRow, seat) => {
+                    // Seats created before the per-row feature have no
+                    // row_number stamped — fall back to a single row so
+                    // they still render instead of disappearing.
+                    const rowNumber = seat.row_number || 1;
+                    (byRow[rowNumber] = byRow[rowNumber] || []).push(seat);
+                    return byRow;
+                  }, {})
+                )
+                  .sort((a, b) => Number(a[0]) - Number(b[0]))
+                  .map(([rowNumber, rowSeats]) => (
+                    <div className="seat-map-row" key={rowNumber}>
+                      {rowSeats.map((seat) => {
+                        const status = seatStatusClass(seat);
+                        const urgency = seatPaymentUrgency(seat);
+                        const colorCls = seatColorClass(seat);
+                        const dueDate = seatDueDate(seat);
+                        const timeline = seat.timeline || [];
+                        // Quick-mark only makes sense when there's exactly
+                        // one student on this seat right now — with more
+                        // than one (a shared/partial seat) it's ambiguous
+                        // which student "Present" would apply to, so those
+                        // still go through the seat detail drawer instead.
+                        const soleOccupant = timeline.length === 1 ? timeline[0] : null;
+                        const label =
+                          status === 'occupied' || status === 'partial'
+                            ? `Seat ${seat.seat_number}, ${status}${urgency !== 'ok' ? `, payment ${urgency.replace('_', ' ')}` : ''}`
+                            : `Seat ${seat.seat_number}, ${status}`;
+                        return (
+                          <div key={seat.seat_id} className={`seat-cell ${colorCls}${timeline.length > 0 ? ' has-occupant' : ''}`} title={label}>
+                            <button type="button" className="seat-number-btn" onClick={() => setSelectedSeat(seat)} aria-label={label}>
+                              {seat.seat_number}
+                            </button>
+                            {timeline.length > 0 && (
+                              <>
+                                <div className="seat-due-date">{dueDate ? `Due ${dueDate}` : 'No dues'}</div>
+                                {soleOccupant ? (
+                                  <div className="seat-quick-attendance">
+                                    <button
+                                      type="button"
+                                      className={`seat-quick-btn ${attendanceMarks[soleOccupant.studentId] === 'present' ? 'is-present' : ''}`}
+                                      disabled={quickBusyId === soleOccupant.studentId}
+                                      onClick={(e) => { e.stopPropagation(); markQuickAttendance(soleOccupant.studentId, 'present'); }}
+                                      title={`Mark ${soleOccupant.studentName || soleOccupant.studentId} present today`}
+                                    >
+                                      {t('attendance.present')}
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className={`seat-quick-btn ${attendanceMarks[soleOccupant.studentId] === 'absent' ? 'is-absent' : ''}`}
+                                      disabled={quickBusyId === soleOccupant.studentId}
+                                      onClick={(e) => { e.stopPropagation(); markQuickAttendance(soleOccupant.studentId, 'absent'); }}
+                                      title={`Mark ${soleOccupant.studentName || soleOccupant.studentId} absent today`}
+                                    >
+                                      {t('attendance.absent')}
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="seat-quick-note">{timeline.length} students</div>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
-                  );
-                })}
+                  ))}
               </div>
             )}
           </div>

@@ -39,11 +39,20 @@ const SHEETS = {
   Floors: [
     'floor_id', 'floor_name', 'floor_number', 'rows', 'columns',
     'opening_time', 'closing_time', 'status', 'notes', 'created_at', 'updated_at',
+    // Per-row seat counts, e.g. "[14,13,12]" — rows can have different
+    // widths. `rows` (row count) and `columns` (max row width) above are
+    // kept in sync from this for old code paths that still read a single
+    // grid size (CSS grid width, summaries), but row_config_json is the
+    // source of truth for seat generation and layout.
+    'row_config_json',
   ],
 
   Seats: [
     'seat_id', 'floor_id', 'seat_number', 'status', // available|disabled
     'disabled_reason', 'notes', 'created_at', 'updated_at',
+    // Position within the floor's variable-width grid — needed because
+    // seat_number alone no longer implies a row when rows differ in length.
+    'row_number', 'col_number',
   ],
 
   Students: [

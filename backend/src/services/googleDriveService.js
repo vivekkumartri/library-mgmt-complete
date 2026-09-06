@@ -144,6 +144,16 @@ class GoogleDriveService {
     }
   }
 
+  /** Permanently deletes one file. Best-effort callers should swallow a NOT_FOUND. */
+  async deleteFile(fileId) {
+    try {
+      const drive = this._client();
+      await drive.files.delete({ fileId });
+    } catch (err) {
+      throw this._wrapError(err, 'delete file from Google Drive');
+    }
+  }
+
   async getFileBuffer(fileId) {
     try {
       const drive = this._client();

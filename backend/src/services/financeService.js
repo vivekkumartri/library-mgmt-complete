@@ -13,6 +13,18 @@ function toRupees(paise) {
   return Math.round(paise) / 100;
 }
 
+/**
+ * Calendar-day-only Date at UTC midnight, read from a Date's UTC fields.
+ * `new Date('YYYY-MM-DD')` parses as UTC midnight, but `Date.prototype
+ * .getFullYear()`/`getDate()` read the LOCAL calendar day — on any host
+ * west of UTC that silently reads back the day before. Every "which
+ * calendar day is this" comparison in this file goes through here so the
+ * result doesn't depend on the server's timezone.
+ */
+function dateOnlyUTC(d) {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 /** Fixed or percentage late fee, applied against the (base - discount) amount. */
 function computeLateFee({ baseFee, discount, lateFeeConfig, daysLate }) {
   if (!lateFeeConfig || daysLate <= (lateFeeConfig.gracePeriodDays || 0)) return 0;
@@ -57,8 +69,8 @@ const URGENCY_RANK = { overdue: 3, due_today: 2, due_soon: 1, ok: 0 };
 function paymentUrgency({ payable, paid, dueDate, today = new Date() }) {
   const balance = computeBalance({ payable, paid });
   if (balance <= 0 || !dueDate) return 'ok';
-  const due = new Date(dueDate);
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const due = dateOnlyUTC(new Date(dueDate));
+  const startOfToday = dateOnlyUTC(today);
   const daysUntilDue = Math.round((due - startOfToday) / (1000 * 60 * 60 * 24));
   if (daysUntilDue < 0) return 'overdue';
   if (daysUntilDue === 0) return 'due_today';
@@ -93,8 +105,8 @@ function autoPaymentStatus({ joinDate, monthlyFee, totalPaid = 0, today = new Da
   if (!joinDate || fee <= 0) {
     return { urgency: 'ok', paidThroughDate: null, owed: 0, paid, balance: 0 };
   }
-  const join = new Date(`${joinDate}T00:00:00`);
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const join = dateOnlyUTC(new Date(`${joinDate}T00:00:00Z`));
+  const startOfToday = dateOnlyUTC(today);
 
   // How many days of coverage the amount paid so far buys, laid out from
   // the join date — this is the date the student is "paid through", and

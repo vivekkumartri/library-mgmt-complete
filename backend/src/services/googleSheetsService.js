@@ -231,6 +231,25 @@ class GoogleSheetsService {
   }
 
   /**
+   * Permanently removes one row by id. Reuses overwriteSheet's clear-then-
+   * rewrite approach (rather than a batchUpdate deleteDimension, which
+   * needs the sheet's numeric gid) so it stays consistent with the same
+   * fresh-read-then-replace pattern the rest of this file already uses.
+   * Only for genuine hard deletes — most of the app prefers a status flag
+   * (e.g. seats marked 'removed', students 'deactivated') so historical
+   * records referencing the row stay resolvable; use this only where the
+   * caller has already confirmed nothing else references the row.
+   */
+  async deleteById(sheetName, idColumn, idValue) {
+    const { rows } = await this.getAll(sheetName, { fresh: true });
+    const remaining = rows.filter((r) => r[idColumn] !== idValue);
+    if (remaining.length === rows.length) {
+      throw new AppError('NOT_FOUND', `${sheetName} record ${idValue} not found`, 404);
+    }
+    return this.overwriteSheet(sheetName, remaining);
+  }
+
+  /**
    * Fully replaces a sheet's data rows (everything below the header) with
    * `rows`. Used by restore, not by normal app writes — a restore needs to
    * remove rows too (a sheet that had 40 rows at backup time and 60 now

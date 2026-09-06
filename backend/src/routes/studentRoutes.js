@@ -163,6 +163,70 @@ router.post(
   })
 );
 
+/**
+ * Permanent delete — only for a student with zero real activity (no
+ * allocation, payment, or attendance record ever created for them), so
+ * this can only clean up a mistakenly-created entry. Anyone with actual
+ * history must go through /:id/deactivate instead, which is reversible
+ * and keeps their records resolvable.
+ */
+router.delete(
+  '/:id',
+  requireAuth,
+  requireAdmin,
+  requirePermission('students'),
+  asyncHandler(async (req, res) => {
+    const student = await repos.students.findById(req.params.id);
+    if (!student) throw new AppError('NOT_FOUND', 'Student not found.', 404);
+
+    const [allocations, payments, attendance] = await Promise.all([
+      repos.allocations.findAll((a) => a.student_id === req.params.id),
+      repos.payments.findAll((p) => p.student_id === req.params.id),
+      repos.attendance.findAll((a) => a.student_id === req.params.id),
+    ]);
+    if (allocations.length > 0 || payments.length > 0 || attendance.length > 0) {
+      throw new AppError(
+        'STUDENT_HAS_HISTORY',
+        'This student has allocation, payment, or attendance history and cannot be permanently deleted — use Deactivate instead.',
+        409
+      );
+    }
+
+    // Profile-only data (no financial/attendance meaning) — safe to clean
+    // up alongside the student record itself.
+    const [documents, vacations, feePlans] = await Promise.all([
+      repos.studentDocuments.findAll((d) => d.student_id === req.params.id),
+      repos.studentVacations.findAll((v) => v.student_id === req.params.id),
+      repos.feePlans.findAll((f) => f.student_id === req.params.id),
+    ]);
+
+    const driveFileIds = [
+      student.photo_drive_file_id,
+      student.signature_drive_file_id,
+      ...documents.map((d) => d.drive_file_id),
+    ].filter(Boolean);
+    for (const fileId of driveFileIds) {
+      try {
+        await driveService.deleteFile(fileId);
+      } catch {
+        // Best-effort — a file already removed/missing shouldn't block
+        // deleting the student record itself.
+      }
+    }
+
+    for (const doc of documents) await repos.studentDocuments.delete(doc.document_id);
+    for (const vacation of vacations) await repos.studentVacations.delete(vacation.vacation_id);
+    for (const plan of feePlans) await repos.feePlans.delete(plan.fee_plan_id);
+    await repos.students.delete(req.params.id);
+
+    await auditService.log({
+      actor: req.user, action: 'student_deleted', entity: 'Students', entityId: req.params.id,
+      previousValue: stripSensitive(student),
+    });
+    res.status(204).send();
+  })
+);
+
 router.post(
   '/:id/reset-password',
   requireAuth,

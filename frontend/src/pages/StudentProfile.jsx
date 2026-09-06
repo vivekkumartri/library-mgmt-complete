@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import SignaturePad from '../components/SignaturePad';
@@ -21,6 +21,7 @@ const URGENCY_BADGE_CLASS = {
 
 export default function StudentProfile() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const [student, setStudent] = useState(null);
   const [allocations, setAllocations] = useState([]);
   const [billing, setBilling] = useState([]);
@@ -108,6 +109,22 @@ export default function StudentProfile() {
     try {
       await api.post(`/students/${id}/reactivate`);
       load();
+    } catch (err) {
+      setNotice(apiErrorMessage(err));
+    }
+  }
+
+  async function deleteStudent() {
+    if (
+      !window.confirm(
+        `Permanently delete ${student.full_name} (${student.student_id})? This cannot be undone. Use Deactivate instead if you want to keep their records.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await api.delete(`/students/${id}`);
+      navigate('/students');
     } catch (err) {
       setNotice(apiErrorMessage(err));
     }
@@ -223,7 +240,18 @@ export default function StudentProfile() {
                 Reactivate student
               </button>
             )}
+            {allocations.length === 0 && payments.length === 0 && attendance.length === 0 && (
+              <button className="btn btn-danger" onClick={deleteStudent}>
+                Delete permanently
+              </button>
+            )}
           </div>
+          {allocations.length === 0 && payments.length === 0 && attendance.length === 0 && (
+            <p style={{ fontSize: 12, color: 'var(--color-ink-soft)', marginTop: 8 }}>
+              No allocation, payment, or attendance history yet — this student can still be permanently deleted. Once any
+              of those exist, only Deactivate will be available.
+            </p>
+          )}
           {student.status === 'past' && student.leaving_date && (
             <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 8 }}>Left on {student.leaving_date}</p>
           )}

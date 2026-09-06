@@ -175,6 +175,25 @@ textarea.input { height: auto; padding: var(--space-3); }
   gap: var(--space-2);
 }
 
+/* Floors with rows of different widths render as one flex row per row,
+   each holding that row's own seat count — a single CSS grid can't do
+   this since it needs one column count for every row. */
+.seat-map-rows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.seat-map-row {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.seat-map-row .seat-cell {
+  width: var(--touch-target-lg, 56px);
+  flex: 0 0 auto;
+}
+
 .seat-cell {
   aspect-ratio: 1;
   border-radius: var(--radius-sm);

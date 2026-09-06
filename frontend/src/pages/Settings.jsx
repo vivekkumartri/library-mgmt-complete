@@ -681,26 +681,77 @@ function RestoreConfirmDrawer({ backup, onClose, onDone }) {
   );
 }
 
+/**
+ * Lets an admin pick a row, then set how many seats/columns that specific
+ * row has — rows don't have to be the same width. Renders as a list with
+ * one number input per row plus add/remove-row controls.
+ */
+function RowConfigEditor({ rowConfig, onChange }) {
+  function setRowColumns(index, value) {
+    const next = [...rowConfig];
+    next[index] = value;
+    onChange(next);
+  }
+  function addRow() {
+    onChange([...rowConfig, rowConfig[rowConfig.length - 1] || 10]);
+  }
+  function removeRow(index) {
+    onChange(rowConfig.filter((_, i) => i !== index));
+  }
+  const total = rowConfig.reduce((sum, c) => sum + (Number(c) || 0), 0);
+
+  return (
+    <div className="field">
+      <label>Rows &amp; seats per row</label>
+      {rowConfig.map((count, i) => (
+        <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 6 }}>
+          <span style={{ fontSize: 13, color: 'var(--color-ink-soft)', width: 60 }}>Row {i + 1}</span>
+          <input
+            className="input"
+            type="number"
+            min="1"
+            value={count}
+            onChange={(e) => setRowColumns(i, e.target.value)}
+            style={{ flex: 1 }}
+          />
+          <button
+            type="button"
+            className="btn btn-outline"
+            disabled={rowConfig.length <= 1}
+            onClick={() => removeRow(i)}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      <button type="button" className="btn btn-outline" onClick={addRow}>
+        + Add row
+      </button>
+      <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>Total: {total} seats.</p>
+    </div>
+  );
+}
+
 function FloorFormDrawer({ onClose, onDone }) {
   const [floorName, setFloorName] = useState('');
   const [floorNumber, setFloorNumber] = useState('1');
-  const [rows, setRows] = useState('5');
-  const [columns, setColumns] = useState('10');
+  const [rowConfig, setRowConfig] = useState([10]);
   const [openingTime, setOpeningTime] = useState('06:00');
   const [closingTime, setClosingTime] = useState('22:00');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
   async function submit() {
-    if (!floorName || !rows || !columns) {
-      setError('Floor name, rows and columns are required.');
+    const numericRowConfig = rowConfig.map(Number);
+    if (!floorName || numericRowConfig.some((c) => !c || c < 1)) {
+      setError('Floor name is required, and every row needs at least 1 seat.');
       return;
     }
     setBusy(true);
     setError('');
     try {
       await api.post('/floors', {
-        floorName, floorNumber, rows: Number(rows), columns: Number(columns), openingTime, closingTime,
+        floorName, floorNumber, rowConfig: numericRowConfig, openingTime, closingTime,
       });
       onDone();
     } catch (err) {
@@ -722,18 +773,9 @@ function FloorFormDrawer({ onClose, onDone }) {
           <label>Floor number</label>
           <input className="input" value={floorNumber} onChange={(e) => setFloorNumber(e.target.value)} />
         </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Rows</label>
-            <input className="input" type="number" value={rows} onChange={(e) => setRows(e.target.value)} />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Columns</label>
-            <input className="input" type="number" value={columns} onChange={(e) => setColumns(e.target.value)} />
-          </div>
-        </div>
+        <RowConfigEditor rowConfig={rowConfig} onChange={setRowConfig} />
         <p style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-          This will generate {Number(rows || 0) * Number(columns || 0)} seats automatically, numbered 1 to {Number(rows || 0) * Number(columns || 0)}.
+          Seats are numbered sequentially row by row as you defined above.
         </p>
         <div style={{ display: 'flex', gap: 12 }}>
           <div className="field" style={{ flex: 1 }}>
@@ -776,8 +818,16 @@ function EditFloorDrawer({ floor, onClose, onDone, onResized }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [rows, setRows] = useState(String(floor.rows));
-  const [columns, setColumns] = useState(String(floor.columns));
+  const initialRowConfig = (() => {
+    try {
+      const parsed = JSON.parse(floor.row_config_json || '[]');
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    } catch {
+      // fall through to the uniform-grid fallback below
+    }
+    return Array(Number(floor.rows) || 1).fill(Number(floor.columns) || 1);
+  })();
+  const [rowConfig, setRowConfig] = useState(initialRowConfig);
   const [resizeError, setResizeError] = useState('');
   const [resizeNotice, setResizeNotice] = useState('');
   const [resizing, setResizing] = useState(false);
@@ -806,22 +856,20 @@ function EditFloorDrawer({ floor, onClose, onDone, onResized }) {
   }
 
   async function resize() {
-    const newRows = Number(rows);
-    const newColumns = Number(columns);
-    if (!newRows || !newColumns) {
-      setResizeError('Rows and columns are both required.');
+    const numericRowConfig = rowConfig.map(Number);
+    if (numericRowConfig.some((c) => !c || c < 1)) {
+      setResizeError('Every row needs at least 1 seat.');
       return;
     }
-    const newTotal = newRows * newColumns;
-    const currentTotal = floor.rows * floor.columns;
-    if (newTotal === currentTotal) {
-      setResizeError('That is the same seat count as now — nothing to change.');
+    const newTotal = numericRowConfig.reduce((sum, c) => sum + c, 0);
+    const currentTotal = initialRowConfig.reduce((sum, c) => sum + Number(c), 0);
+    if (JSON.stringify(numericRowConfig) === JSON.stringify(initialRowConfig.map(Number))) {
+      setResizeError('That is the same layout as now — nothing to change.');
       return;
     }
     if (newTotal < currentTotal) {
       const shrink = window.confirm(
-        `This will shrink the grid from ${currentTotal} seats to ${newTotal}, removing seats numbered ${newTotal + 1}–${currentTotal}. ` +
-          'Any of those seats with an active or scheduled allocation will block the resize. Continue?'
+        `This will shrink the grid from ${currentTotal} seats to ${newTotal}. Any removed seat with an active or scheduled allocation will block the resize. Continue?`
       );
       if (!shrink) return;
     }
@@ -829,7 +877,7 @@ function EditFloorDrawer({ floor, onClose, onDone, onResized }) {
     setResizeError('');
     setResizeNotice('');
     try {
-      const res = await api.patch(`/floors/${floor.floor_id}/resize`, { rows: newRows, columns: newColumns });
+      const res = await api.patch(`/floors/${floor.floor_id}/resize`, { rowConfig: numericRowConfig });
       setResizeNotice(
         res.data.seatsAdded > 0 ? `Added ${res.data.seatsAdded} seat(s).` : `Removed ${res.data.seatsRemoved} seat(s).`
       );
@@ -887,22 +935,11 @@ function EditFloorDrawer({ floor, onClose, onDone, onResized }) {
 
         <h4 style={{ marginBottom: 4 }}>Resize seat grid</h4>
         <p style={{ fontSize: 12, color: 'var(--color-ink-soft)', marginTop: 0 }}>
-          Currently {floor.rows} × {floor.columns} = {floor.rows * floor.columns} seats. Growing adds new empty seats at the
-          end; shrinking removes seats from the end and is blocked if any of them are currently allocated.
+          Currently {initialRowConfig.reduce((sum, c) => sum + Number(c), 0)} seats across {initialRowConfig.length} row(s).
+          Pick a row and change its seat count independently of the others — growing a row adds seats at its end, shrinking
+          removes seats from its end and is blocked if any of them are currently allocated.
         </p>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Rows</label>
-            <input className="input" type="number" data-testid="resize-rows" value={rows} onChange={(e) => setRows(e.target.value)} />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Columns</label>
-            <input className="input" type="number" data-testid="resize-columns" value={columns} onChange={(e) => setColumns(e.target.value)} />
-          </div>
-        </div>
-        <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>
-          New total: {Number(rows || 0) * Number(columns || 0)} seats.
-        </p>
+        <RowConfigEditor rowConfig={rowConfig} onChange={setRowConfig} />
         {resizeError && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{resizeError}</p>}
         {resizeNotice && <p style={{ color: 'var(--color-success)', fontSize: 13 }}>{resizeNotice}</p>}
         <button className="btn btn-outline" disabled={resizing} onClick={resize}>

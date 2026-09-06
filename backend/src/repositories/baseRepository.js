@@ -34,6 +34,11 @@ class BaseRepository {
   async update(id, patch) {
     return sheetsService.updateById(this.sheetName, this.idColumn, id, patch);
   }
+
+  /** Permanent hard delete — see googleSheetsService.deleteById for caveats. */
+  async delete(id) {
+    return sheetsService.deleteById(this.sheetName, this.idColumn, id);
+  }
 }
 
 module.exports = { BaseRepository };
