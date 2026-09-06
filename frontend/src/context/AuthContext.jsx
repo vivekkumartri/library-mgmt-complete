@@ -6,7 +6,13 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(() => {
     const raw = localStorage.getItem('lib_user');
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw);
+    } catch {
+      localStorage.removeItem('lib_user');
+      return null;
+    }
   });
   const [loading, setLoading] = useState(true);
 
@@ -19,6 +25,7 @@ export function AuthProvider({ children }) {
     api
       .get('/auth/me')
       .then((res) => {
+        if (!res.data?.user) throw new Error('Malformed /auth/me response');
         setUser(res.data.user);
         localStorage.setItem('lib_user', JSON.stringify(res.data.user));
       })
