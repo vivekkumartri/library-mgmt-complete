@@ -3,7 +3,7 @@ services:
   - type: web
     name: library-mgmt-backend
     runtime: node
-    plan: starter
+    plan: free
     rootDir: backend
     buildCommand: npm install
     startCommand: npm start
@@ -37,10 +37,13 @@ services:
         value: RCPT
       - key: DEFAULT_CURRENCY
         value: INR
-      # Backups run via the separate cron job below, not in-process, so a
-      # sleeping/restarting web service can't cause a missed backup.
+      # Render's Cron Job service has no free tier, so backups run
+      # in-process instead. This only fires while the web service is
+      # awake — pair it with a free external pinger (e.g. cron-job.org,
+      # UptimeRobot) hitting /api/health every ~10 min to keep the free
+      # instance from sleeping, so the 2am backup actually runs.
       - key: BACKUP_ENABLED
-        value: "false"
+        value: "true"
 
   # ---- Frontend (static site) ----
   - type: web
@@ -57,27 +60,6 @@ services:
         source: /*
         destination: /index.html
 
-  # ---- Scheduled backup (section 45) ----
-  # A dedicated Cron Job rather than in-process node-cron: it runs on its
-  # own schedule independent of the web service's uptime, so a sleeping
-  # starter-plan web dyno never causes a missed backup.
-  - type: cron
-    name: library-mgmt-backup
-    runtime: node
-    rootDir: backend
-    schedule: "0 2 * * *" # daily at 02:00 UTC
-    buildCommand: npm install
-    startCommand: node scripts/runBackup.js
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: GOOGLE_PROJECT_ID
-        sync: false
-      - key: GOOGLE_CLIENT_EMAIL
-        sync: false
-      - key: GOOGLE_PRIVATE_KEY
-        sync: false
-      - key: GOOGLE_SPREADSHEET_ID
-        sync: false
-      - key: GOOGLE_DRIVE_ROOT_FOLDER_ID
-        sync: false
+  # Render has no free tier for Cron Jobs, so the dedicated backup cron
+  # service was removed. Backups now run in-process on the free web
+  # service above (BACKUP_ENABLED=true) — see the note on that env var.
