@@ -105,6 +105,29 @@ router.post(
   })
 );
 
+const updateDateSchema = z.object({
+  startDate: z.string().min(1),
+  confirmOverlap: z.boolean().optional().default(false),
+});
+
+/**
+ * Corrects an allocation's start date after the fact (e.g. mis-typed at
+ * booking time). Same two-step confirm flow as POST / — the first call
+ * (confirmOverlap=false) returns a warning without saving if the new date
+ * would overlap another allocation on the same seat.
+ */
+router.patch(
+  '/:id',
+  requireAuth,
+  requireAdmin,
+  requirePermission('allocations'),
+  asyncHandler(async (req, res) => {
+    const data = updateDateSchema.parse(req.body);
+    const result = await AllocationService.updateAllocationStartDate(req.params.id, data, req.user);
+    res.json(result);
+  })
+);
+
 router.post(
   '/:id/end',
   requireAuth,

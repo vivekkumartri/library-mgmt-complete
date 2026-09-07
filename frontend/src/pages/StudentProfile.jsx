@@ -41,6 +41,8 @@ export default function StudentProfile() {
   const [showAddVacation, setShowAddVacation] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [copiedField, setCopiedField] = useState('');
+  const [showEditProfile, setShowEditProfile] = useState(false);
+  const [editingAllocationDate, setEditingAllocationDate] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -125,6 +127,24 @@ export default function StudentProfile() {
     try {
       await api.delete(`/students/${id}`);
       navigate('/students');
+    } catch (err) {
+      setNotice(apiErrorMessage(err));
+    }
+  }
+
+  async function deletePayment(payment) {
+    const reason = window.prompt(
+      `Delete payment ${payment.receipt_number} (₹${payment.amount})? This voids it and recalculates the student's billing/due status. Enter a reason:`
+    );
+    if (reason === null) return;
+    if (!reason.trim()) {
+      setNotice('A reason is required to delete a payment.');
+      return;
+    }
+    try {
+      await api.post(`/payments/${payment.payment_id}/void`, { reason: reason.trim() });
+      setNotice('Payment deleted.');
+      load();
     } catch (err) {
       setNotice(apiErrorMessage(err));
     }
@@ -217,12 +237,24 @@ export default function StudentProfile() {
 
       <div className="card-grid cols-2">
         <div className="card">
-          <h3>Profile</h3>
+          <div className="topbar" style={{ marginBottom: 8 }}>
+            <h3 style={{ margin: 0 }}>Profile</h3>
+            <button className="btn btn-outline" onClick={() => setShowEditProfile(true)}>
+              Edit
+            </button>
+          </div>
           <Row label="Student ID" value={student.student_id} />
+          <Row label="Father's name" value={student.father_name} />
+          <Row label="Mother's name" value={student.mother_name} />
           <Row label="Mobile" value={student.mobile} />
+          <Row label="Alternate mobile" value={student.alternate_mobile} />
           <Row label="Email" value={student.email} />
+          <Row label="Date of birth" value={student.date_of_birth} />
           <Row label="Joining date" value={student.joining_date} />
           <Row label="Address" value={student.address} />
+          <Row label="ID proof" value={student.id_proof_details} />
+          <Row label="Emergency contact" value={student.emergency_contact} />
+          <Row label="Notes" value={student.notes} />
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={() => setShowCamera((v) => !v)}>
               {student.photo_drive_file_id ? 'Retake photo' : 'Capture photo'}
@@ -254,6 +286,17 @@ export default function StudentProfile() {
           )}
           {student.status === 'past' && student.leaving_date && (
             <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 8 }}>Left on {student.leaving_date}</p>
+          )}
+          {showEditProfile && (
+            <EditProfileDrawer
+              student={student}
+              onClose={() => setShowEditProfile(false)}
+              onDone={() => {
+                setShowEditProfile(false);
+                setNotice('Profile updated.');
+                load();
+              }}
+            />
           )}
           {showCamera && (
             <div style={{ marginTop: 16 }}>
@@ -300,16 +343,32 @@ export default function StudentProfile() {
                   {a.start_date} → {a.actual_end_date || 'ongoing'}
                 </div>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                 <span className={`badge ${a.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{a.status}</span>
                 {(a.status === 'active' || a.status === 'scheduled') && (
-                  <button className="btn btn-outline" onClick={() => setEndingAllocation(a)}>
-                    End allocation
-                  </button>
+                  <>
+                    <button className="btn btn-outline" onClick={() => setEditingAllocationDate(a)}>
+                      Edit start date
+                    </button>
+                    <button className="btn btn-outline" onClick={() => setEndingAllocation(a)}>
+                      End allocation
+                    </button>
+                  </>
                 )}
               </div>
             </div>
           ))}
+          {editingAllocationDate && (
+            <EditAllocationDateDrawer
+              allocation={editingAllocationDate}
+              onClose={() => setEditingAllocationDate(null)}
+              onDone={() => {
+                setEditingAllocationDate(null);
+                setNotice('Allocation start date updated.');
+                load();
+              }}
+            />
+          )}
           {endingAllocation && (
             <EndAllocationDrawer
               allocation={endingAllocation}
@@ -437,9 +496,16 @@ export default function StudentProfile() {
                   {p.status === 'void' ? ' · VOID' : ''}
                 </div>
               </div>
-              <a className="btn btn-outline" href={`${import.meta.env.VITE_API_BASE_URL || '/api'}/payments/${p.payment_id}/receipt.pdf`} target="_blank" rel="noreferrer">
-                View PDF
-              </a>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <a className="btn btn-outline" href={`${import.meta.env.VITE_API_BASE_URL || '/api'}/payments/${p.payment_id}/receipt.pdf`} target="_blank" rel="noreferrer">
+                  View PDF
+                </a>
+                {p.status !== 'void' && (
+                  <button className="btn btn-danger" onClick={() => deletePayment(p)}>
+                    Delete
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -453,6 +519,181 @@ function Row({ label, value }) {
     <div className="list-item">
       <span style={{ color: 'var(--color-ink-soft)' }}>{label}</span>
       <span>{value || '—'}</span>
+    </div>
+  );
+}
+
+function EditAllocationDateDrawer({ allocation, onClose, onDone }) {
+  const [startDate, setStartDate] = useState(allocation.start_date || '');
+  const [warning, setWarning] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit(confirmOverlap = false) {
+    if (!startDate) {
+      setError('Start date is required.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      const res = await api.patch(`/allocations/${allocation.allocation_id}`, { startDate, confirmOverlap });
+      if (res.data.requiresConfirmation) {
+        setWarning(res.data.warning);
+        return;
+      }
+      onDone();
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Unable to update the start date.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit allocation start date</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          Seat {allocation.start_time} – {allocation.end_time}, currently starting {allocation.start_date}.
+        </p>
+        <div className="field">
+          <label>New start date</label>
+          <input className="input" type="date" value={startDate} onChange={(e) => { setStartDate(e.target.value); setWarning(''); }} />
+        </div>
+        {warning && (
+          <p style={{ color: 'var(--color-warning)', fontSize: 13 }}>
+            {warning} Submit again to confirm anyway.
+          </p>
+        )}
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-primary" disabled={busy} onClick={() => submit(Boolean(warning))}>
+            {warning ? 'Confirm anyway' : 'Save'}
+          </button>
+          <button className="btn btn-outline" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EditProfileDrawer({ student, onClose, onDone }) {
+  const [fullName, setFullName] = useState(student.full_name || '');
+  const [fatherName, setFatherName] = useState(student.father_name || '');
+  const [motherName, setMotherName] = useState(student.mother_name || '');
+  const [mobile, setMobile] = useState(student.mobile || '');
+  const [alternateMobile, setAlternateMobile] = useState(student.alternate_mobile || '');
+  const [email, setEmail] = useState(student.email || '');
+  const [dateOfBirth, setDateOfBirth] = useState(student.date_of_birth || '');
+  const [joiningDate, setJoiningDate] = useState(student.joining_date || '');
+  const [address, setAddress] = useState(student.address || '');
+  const [idProofDetails, setIdProofDetails] = useState(student.id_proof_details || '');
+  const [emergencyContact, setEmergencyContact] = useState(student.emergency_contact || '');
+  const [notes, setNotes] = useState(student.notes || '');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function submit() {
+    if (!fullName || !mobile || !joiningDate) {
+      setError('Full name, mobile and joining date are required.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    try {
+      await api.patch(`/students/${student.student_id}`, {
+        full_name: fullName,
+        father_name: fatherName,
+        mother_name: motherName,
+        mobile,
+        alternate_mobile: alternateMobile,
+        email,
+        date_of_birth: dateOfBirth,
+        joining_date: joiningDate,
+        address,
+        id_proof_details: idProofDetails,
+        emergency_contact: emergencyContact,
+        notes,
+      });
+      onDone();
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Unable to update profile.'));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+        <h3>Edit profile</h3>
+        <div className="field">
+          <label>Full name</label>
+          <input className="input" value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Father's name</label>
+            <input className="input" value={fatherName} onChange={(e) => setFatherName(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Mother's name</label>
+            <input className="input" value={motherName} onChange={(e) => setMotherName(e.target.value)} />
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Mobile</label>
+            <input className="input" value={mobile} onChange={(e) => setMobile(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Alternate mobile</label>
+            <input className="input" value={alternateMobile} onChange={(e) => setAlternateMobile(e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label>Email</label>
+          <input className="input" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        </div>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Date of birth</label>
+            <input className="input" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+          </div>
+          <div className="field" style={{ flex: 1 }}>
+            <label>Joining date</label>
+            <input className="input" type="date" value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)} />
+          </div>
+        </div>
+        <div className="field">
+          <label>Address</label>
+          <textarea className="input" rows={2} value={address} onChange={(e) => setAddress(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>ID proof details</label>
+          <input className="input" value={idProofDetails} onChange={(e) => setIdProofDetails(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Emergency contact</label>
+          <input className="input" value={emergencyContact} onChange={(e) => setEmergencyContact(e.target.value)} />
+        </div>
+        <div className="field">
+          <label>Notes</label>
+          <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </div>
+        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{error}</p>}
+        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
+          <button className="btn btn-primary" disabled={busy} onClick={submit}>
+            Save changes
+          </button>
+          <button className="btn btn-outline" onClick={onClose}>
+            Cancel
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

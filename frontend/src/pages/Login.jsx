@@ -21,7 +21,7 @@ export default function Login() {
     setBusy(true);
     try {
       if (mode === 'admin') {
-        await loginAsAdmin(email, password);
+        await loginAsAdmin(email.trim().toLowerCase(), password);
       } else {
         await loginAsStudent(studentId, password);
       }

@@ -140,6 +140,49 @@ class AllocationService {
     return { allocation: record, warning, overlappingAllocations };
   }
 
+  /**
+   * Corrects an existing allocation's start date (e.g. it was entered
+   * wrong at booking time). Re-runs the same overlap check createAllocation
+   * uses — excluding this allocation itself — so moving the date can't
+   * silently create an undetected seat double-booking; like creation, an
+   * overlap is only a warning the caller must explicitly confirm through,
+   * not a hard block.
+   */
+  async updateAllocationStartDate(allocationId, { startDate, confirmOverlap = false }, actor) {
+    const existing = await repos.allocations.findById(allocationId);
+    if (!existing) throw new AppError('NOT_FOUND', 'Allocation not found.', 404);
+    if (existing.status === 'ended' || existing.status === 'cancelled') {
+      throw new AppError('ALREADY_ENDED', 'This allocation has already ended and cannot be edited.', 400);
+    }
+    if (existing.actual_end_date && startDate > existing.actual_end_date) {
+      throw new AppError('INVALID_DATE_RANGE', 'Start date cannot be after this allocation\'s end date.', 400);
+    }
+
+    const { warning, overlappingAllocations } = await this.validateAllocation({
+      studentId: existing.student_id,
+      seatId: existing.seat_id,
+      startTime: existing.start_time,
+      endTime: existing.end_time,
+      excludeAllocationId: allocationId,
+    });
+    if (warning && !confirmOverlap) {
+      return { requiresConfirmation: true, warning, overlappingAllocations };
+    }
+
+    const updated = await repos.allocations.update(allocationId, {
+      start_date: startDate,
+      updated_by: actor?.id || 'system',
+      updated_at: new Date().toISOString(),
+    });
+
+    await auditService.log({
+      actor, action: 'allocation_start_date_edited', entity: 'Seat_Allocations', entityId: allocationId,
+      previousValue: { start_date: existing.start_date }, newValue: { start_date: updated.start_date },
+    });
+
+    return { allocation: updated, warning: null, overlappingAllocations: [] };
+  }
+
   async endAllocation(allocationId, { actualEndDate, reason, notes }, actor) {
     const existing = await repos.allocations.findById(allocationId);
     if (!existing) throw new AppError('NOT_FOUND', 'Allocation not found.', 404);

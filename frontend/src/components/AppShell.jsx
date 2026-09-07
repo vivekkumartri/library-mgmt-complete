@@ -9,6 +9,7 @@ const ADMIN_NAV = [
   { to: '/students', key: 'students', icon: '\u1F464'.slice(0, 1) || 'S' },
   { to: '/students/past', key: 'pastStudents', icon: '\u21BB' },
   { to: '/billing', key: 'billing', icon: '\u20B9' },
+  { to: '/expenses', key: 'expenses', icon: '\u2212' },
   { to: '/attendance', key: 'attendance', icon: '\u2713' },
   { to: '/notices', key: 'notices', icon: '\u1F514'.slice(0, 1) || 'N' },
   { to: '/reports', key: 'reports', icon: '\u2261' },

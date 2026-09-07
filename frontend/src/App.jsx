@@ -8,6 +8,7 @@ import StudentsList from './pages/StudentsList';
 import AddStudent from './pages/AddStudent';
 import StudentProfile from './pages/StudentProfile';
 import Billing from './pages/Billing';
+import Expenses from './pages/Expenses';
 import Attendance from './pages/Attendance';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
@@ -39,6 +40,7 @@ export default function App() {
           <Route path="/students/past" element={<Protected><StudentsList statusFilter="past" /></Protected>} />
           <Route path="/students/:id" element={<Protected><StudentProfile /></Protected>} />
           <Route path="/billing" element={<Protected><Billing /></Protected>} />
+          <Route path="/expenses" element={<Protected><Expenses /></Protected>} />
           <Route path="/attendance" element={<Protected><Attendance /></Protected>} />
           <Route path="/reports" element={<Protected><Reports /></Protected>} />
           <Route path="/notices" element={<Protected><Notices /></Protected>} />

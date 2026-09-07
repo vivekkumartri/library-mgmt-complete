@@ -9,7 +9,7 @@ const auditService = require('../services/auditService');
 
 const router = express.Router();
 
-const adminLoginSchema = z.object({ email: z.string().email(), password: z.string().min(1) });
+const adminLoginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
 const studentLoginSchema = z.object({ studentId: z.string().min(1), password: z.string().min(1) });
 
 function requestMeta(req) {

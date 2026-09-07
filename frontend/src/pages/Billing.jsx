@@ -49,7 +49,6 @@ export default function Billing() {
   const [students, setStudents] = useState({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [showNewBilling, setShowNewBilling] = useState(false);
   const [payFor, setPayFor] = useState(null);
   const [showRangePayment, setShowRangePayment] = useState(false);
 
@@ -81,11 +80,8 @@ export default function Billing() {
         <h2 style={{ margin: 0 }}>{t('billing.title')}</h2>
         <div style={{ display: 'flex', gap: 8 }}>
           <input className="input" type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={{ width: 160 }} />
-          <button className="btn btn-outline" onClick={() => setShowRangePayment(true)}>
+          <button className="btn btn-primary" onClick={() => setShowRangePayment(true)}>
             Record payment (date range)
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowNewBilling(true)}>
-            {t('billing.newBilling')}
           </button>
         </div>
       </div>
@@ -119,124 +115,10 @@ export default function Billing() {
         </div>
       )}
 
-      {showNewBilling && <NewBillingDrawer onClose={() => setShowNewBilling(false)} onDone={() => { setShowNewBilling(false); load(); }} />}
       {payFor && <RecordPaymentDrawer billing={payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); load(); }} />}
       {showRangePayment && (
         <RecordRangePaymentDrawer onClose={() => setShowRangePayment(false)} onDone={() => { setShowRangePayment(false); load(); }} />
       )}
-    </div>
-  );
-}
-
-function NewBillingDrawer({ onClose, onDone }) {
-  const [student, setStudent] = useState(null);
-  const [billingMonth, setBillingMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [baseFee, setBaseFee] = useState('');
-  const [discount, setDiscount] = useState('0');
-  const [lateFee, setLateFee] = useState('0');
-  const [dueDate, setDueDate] = useState('');
-  const [feePlanNotice, setFeePlanNotice] = useState('');
-  const [error, setError] = useState('');
-  const [busy, setBusy] = useState(false);
-
-  // When a student is picked, prefill from their current fee plan (section
-  // 16/17) — this is only a starting point, the admin can still type a
-  // different amount (mid-month joining, section 19, always allows an
-  // override; this billing record's own base_fee/discount are what get
-  // saved, so a later fee-plan change never retroactively affects it).
-  useEffect(() => {
-    if (!student) {
-      setFeePlanNotice('');
-      return;
-    }
-    let cancelled = false;
-    api.get(`/students/${student.student_id}/fee-plans`).then((res) => {
-      if (cancelled) return;
-      const current = res.data.current;
-      if (current) {
-        setBaseFee(String(current.monthly_fee));
-        setDiscount(String(current.discount || 0));
-        setFeePlanNotice(`Prefilled from current fee plan (effective since ${current.effective_from}). Edit if this month is different.`);
-      } else {
-        setFeePlanNotice('No fee plan on file for this student yet — enter the amount manually.');
-      }
-    }).catch(() => setFeePlanNotice(''));
-    return () => { cancelled = true; };
-  }, [student]);
-
-  async function submit() {
-    if (!student || !baseFee) {
-      setError('Student and base fee are required.');
-      return;
-    }
-    setBusy(true);
-    setError('');
-    try {
-      await api.post('/billing', {
-        studentId: student.student_id,
-        billingMonth,
-        baseFee: Number(baseFee),
-        discount: Number(discount || 0),
-        lateFee: Number(lateFee || 0),
-        dueDate,
-      });
-      onDone();
-    } catch (err) {
-      setError(err?.response?.data?.error?.message || 'Unable to create billing record.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="drawer-backdrop" onClick={onClose}>
-      <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        <h3>New billing record</h3>
-        {!student ? (
-          <StudentSearchPicker onSelect={setStudent} />
-        ) : (
-          <div className="card" style={{ marginBottom: 12 }}>
-            <strong>{student.full_name}</strong> ({student.student_id})
-            <button className="btn btn-outline" style={{ marginLeft: 12 }} onClick={() => setStudent(null)}>
-              Change
-            </button>
-          </div>
-        )}
-        <div className="field">
-          <label>Billing month</label>
-          <input className="input" type="month" value={billingMonth} onChange={(e) => setBillingMonth(e.target.value)} />
-        </div>
-        {feePlanNotice && <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>{feePlanNotice}</p>}
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Base fee (₹)</label>
-            <input className="input" type="number" value={baseFee} onChange={(e) => setBaseFee(e.target.value)} />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Discount (₹)</label>
-            <input className="input" type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
-          </div>
-        </div>
-        <div style={{ display: 'flex', gap: 12 }}>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Late fee (₹)</label>
-            <input className="input" type="number" value={lateFee} onChange={(e) => setLateFee(e.target.value)} />
-          </div>
-          <div className="field" style={{ flex: 1 }}>
-            <label>Due date</label>
-            <input className="input" type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
-          </div>
-        </div>
-        {error && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{error}</p>}
-        <div style={{ display: 'flex', gap: 8, marginTop: 16 }}>
-          <button className="btn btn-primary" disabled={busy} onClick={submit}>
-            Create
-          </button>
-          <button className="btn btn-outline" onClick={onClose}>
-            Cancel
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

@@ -257,4 +257,40 @@ adminsRouter.patch(
   })
 );
 
+/**
+ * Permanent delete — same bar as creating/managing an admin (super admin
+ * only). Unlike students, an admin has no financial/attendance history
+ * tied to them that a delete could orphan, so there's no "has history"
+ * block here — just two safety rails: you can't delete yourself (avoids
+ * locking yourself out mid-session), and the last remaining super admin
+ * can't be deleted (the system must always keep someone who can manage
+ * other admins).
+ */
+adminsRouter.delete(
+  '/:id',
+  requireAuth,
+  requireSuperAdmin,
+  asyncHandler(async (req, res) => {
+    if (req.params.id === req.user.id) {
+      throw new AppError('CANNOT_DELETE_SELF', 'You cannot delete your own admin account.', 400);
+    }
+    const admin = await repos.admins.findById(req.params.id);
+    if (!admin) throw new AppError('NOT_FOUND', 'Admin not found.', 404);
+
+    if (admin.role === 'super_admin') {
+      const superAdmins = await repos.admins.findAll((a) => a.role === 'super_admin' && a.status === 'active');
+      if (superAdmins.length <= 1) {
+        throw new AppError('LAST_SUPER_ADMIN', 'Cannot delete the last remaining super admin.', 409);
+      }
+    }
+
+    await repos.admins.delete(req.params.id);
+    await auditService.log({
+      actor: req.user, action: 'admin_deleted', entity: 'Admins', entityId: req.params.id,
+      previousValue: (({ password_hash, ...safe }) => safe)(admin),
+    });
+    res.status(204).send();
+  })
+);
+
 module.exports = { expensesRouter, noticesRouter, settingsRouter, adminsRouter };

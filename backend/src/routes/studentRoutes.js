@@ -122,7 +122,7 @@ router.patch(
   asyncHandler(async (req, res) => {
     const allowed = [
       'full_name', 'father_name', 'mother_name', 'mobile', 'alternate_mobile', 'email',
-      'address', 'date_of_birth', 'id_proof_details', 'emergency_contact', 'notes',
+      'address', 'date_of_birth', 'id_proof_details', 'emergency_contact', 'notes', 'joining_date',
     ];
     const patch = {};
     for (const key of allowed) if (req.body[key] !== undefined) patch[key] = req.body[key];

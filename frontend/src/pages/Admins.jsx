@@ -25,6 +25,7 @@ export default function Admins() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
   const [showRoleForm, setShowRoleForm] = useState(false);
+  const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +45,17 @@ export default function Admins() {
     load();
   }, [load]);
 
+  async function deleteAdmin(admin) {
+    if (!window.confirm(`Permanently delete ${admin.name} (${admin.email})? This cannot be undone.`)) return;
+    try {
+      await api.delete(`/admins/${admin.admin_id}`);
+      setNotice('Admin deleted.');
+      load();
+    } catch (err) {
+      setNotice(apiErrorMessage(err));
+    }
+  }
+
   if (user?.role !== 'super_admin') {
     return (
       <div className="card">
@@ -60,6 +72,12 @@ export default function Admins() {
           {t('adminsPage.addAdmin')}
         </button>
       </div>
+
+      {notice && (
+        <div className="card" style={{ marginBottom: 16, background: 'var(--color-info-soft)' }}>
+          {notice}
+        </div>
+      )}
 
       {loading && <Loading />}
       {error && !loading && <ErrorState message={error} onRetry={load} />}
@@ -86,6 +104,11 @@ export default function Admins() {
                 {a.role !== 'super_admin' && (
                   <button className="btn btn-outline" onClick={() => setEditing(a)}>
                     {t('adminsPage.editPermissions')}
+                  </button>
+                )}
+                {a.admin_id !== user.id && (
+                  <button className="btn btn-danger" onClick={() => deleteAdmin(a)}>
+                    Delete
                   </button>
                 )}
               </div>

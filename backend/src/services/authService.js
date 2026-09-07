@@ -34,7 +34,11 @@ class AuthService {
   }
 
   async adminLogin(email, password) {
-    const admins = await repos.admins.findAll((a) => a.email === email && a.status === 'active');
+    // Email match is case/whitespace-insensitive — a mobile keyboard
+    // auto-capitalizing the first letter, or a stray trailing space,
+    // shouldn't turn a correct password into "invalid credentials".
+    const normalized = email.trim().toLowerCase();
+    const admins = await repos.admins.findAll((a) => a.email.trim().toLowerCase() === normalized && a.status === 'active');
     const admin = admins[0];
     // Constant-shaped response regardless of which check fails, to avoid
     // leaking whether an email exists.
@@ -127,7 +131,8 @@ class AuthService {
   }
 
   async createAdmin({ name, email, password, role, permissions, roleId }, actor) {
-    const existing = await repos.admins.findAll((a) => a.email === email);
+    const normalizedEmail = email.trim().toLowerCase();
+    const existing = await repos.admins.findAll((a) => a.email.trim().toLowerCase() === normalizedEmail);
     if (existing.length > 0) throw new AppError('EMAIL_IN_USE', 'An admin with this email already exists.', 409);
     let effectivePermissions = permissions || {};
     if (roleId) {
@@ -141,7 +146,7 @@ class AuthService {
     const record = {
       admin_id: uuid(),
       name,
-      email,
+      email: normalizedEmail,
       password_hash: await this.hashPassword(password),
       role: role === 'super_admin' ? 'super_admin' : 'staff',
       role_id: roleId || '',
