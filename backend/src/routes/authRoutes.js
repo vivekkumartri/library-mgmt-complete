@@ -50,6 +50,27 @@ router.post(
   })
 );
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters.'),
+});
+
+// Works for whichever type is logged in — the caller never picks admin vs
+// student explicitly, req.user.type (set by requireAuth from the JWT)
+// decides which record actually gets updated.
+router.post(
+  '/change-password',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+    await authService.changeOwnPassword(
+      { type: req.user.type, id: req.user.id, currentPassword, newPassword },
+      req.user
+    );
+    res.json({ success: true });
+  })
+);
+
 router.post('/logout', (req, res) => {
   // Stateless JWT — logout is a client-side token discard. Endpoint exists
   // for a consistent API surface and future server-side session revocation.

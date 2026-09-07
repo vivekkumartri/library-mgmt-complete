@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import { useAuth } from '../context/AuthContext';
+import ChangePasswordCard from '../components/ChangePasswordCard';
 
 const WEEKDAYS = [
   ['0', 'Sun'], ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'],
@@ -153,6 +154,10 @@ export default function Settings() {
   return (
     <div>
       <h2>{t('settingsPage.title')}</h2>
+
+      <div style={{ marginBottom: 24 }}>
+        <ChangePasswordCard />
+      </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
         <h3>{t('settingsPage.librarySettings')}</h3>

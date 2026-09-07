@@ -78,6 +78,30 @@ class AuthService {
     };
   }
 
+  /**
+   * Self-service password change for either an admin or a logged-in
+   * student — requires the current password, unlike the admin-triggered
+   * resets below which don't (an admin resetting a student's password
+   * doesn't know it). Clears a student's must_reset_password flag, since
+   * choosing their own password satisfies whatever prompted that flag.
+   */
+  async changeOwnPassword({ type, id, currentPassword, newPassword }, actor) {
+    const repo = type === 'admin' ? repos.admins : repos.students;
+    const idField = type === 'admin' ? 'admin_id' : 'student_id';
+    const record = await repo.findById(id);
+    if (!record) throw new AppError('NOT_FOUND', 'Account not found.', 404);
+    const ok = await this.verifyPassword(currentPassword, record.password_hash);
+    if (!ok) throw new AppError('INVALID_CREDENTIALS', 'Current password is incorrect.', 401);
+    const patch = { password_hash: await this.hashPassword(newPassword), updated_at: new Date().toISOString() };
+    if (type === 'student') patch.must_reset_password = 'false';
+    await repo.update(id, patch);
+    await auditService.log({
+      actor, action: type === 'admin' ? 'admin_password_changed' : 'student_password_changed',
+      entity: type === 'admin' ? 'Admins' : 'Students', entityId: id,
+    });
+    return { [idField]: id };
+  }
+
   /** Admin-triggered reset — never reveals or reuses the old password. */
   async resetStudentPassword(studentId, actor) {
     const student = await repos.students.findById(studentId);

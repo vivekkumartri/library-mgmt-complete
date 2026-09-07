@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
+import ChangePasswordCard from '../components/ChangePasswordCard';
 
 export function StudentHome() {
   const { t } = useTranslation();
@@ -263,6 +264,9 @@ export function StudentProfileSelf() {
       <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 12 }}>
         {t('studentPortal.contactStaff')}
       </p>
+      <div style={{ marginTop: 16 }}>
+        <ChangePasswordCard />
+      </div>
     </div>
   );
 }
