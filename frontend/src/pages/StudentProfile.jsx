@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import api, { apiErrorMessage } from '../services/api';
+import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import SignaturePad from '../components/SignaturePad';
 import CameraCapture from '../components/CameraCapture';
@@ -129,6 +129,14 @@ export default function StudentProfile() {
       navigate('/students');
     } catch (err) {
       setNotice(apiErrorMessage(err));
+    }
+  }
+
+  async function viewReceipt(payment) {
+    try {
+      await openReceipt(payment.payment_id, `${payment.receipt_number}.pdf`);
+    } catch (err) {
+      setNotice(apiErrorMessage(err, 'Unable to open this receipt.'));
     }
   }
 
@@ -497,9 +505,9 @@ export default function StudentProfile() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8 }}>
-                <a className="btn btn-outline" href={`${import.meta.env.VITE_API_BASE_URL || '/api'}/payments/${p.payment_id}/receipt.pdf`} target="_blank" rel="noreferrer">
+                <button className="btn btn-outline" onClick={() => viewReceipt(p)}>
                   View PDF
-                </a>
+                </button>
                 {p.status !== 'void' && (
                   <button className="btn btn-danger" onClick={() => deletePayment(p)}>
                     Delete

@@ -50,8 +50,14 @@ router.get(
   '/payments',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const { studentId, billingId } = req.query;
+    const { studentId, billingId, includeVoid } = req.query;
     let rows = await repos.payments.findAll();
+    // A voided ("deleted") payment is excluded everywhere by default — the
+    // same convention expensesRouter's GET / already uses — so an admin
+    // deleting a mistaken payment makes it disappear for the student too,
+    // not just from billing math. Pass includeVoid=true for an admin audit
+    // view that deliberately wants to see the history.
+    if (!includeVoid) rows = rows.filter((p) => p.status !== 'void');
     if (req.user.type === 'student') rows = rows.filter((p) => p.student_id === req.user.id);
     if (studentId) rows = rows.filter((p) => p.student_id === studentId);
     if (billingId) rows = rows.filter((p) => p.billing_id === billingId);
