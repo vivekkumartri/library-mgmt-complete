@@ -11,7 +11,7 @@ const resources = {
         expenses: 'Expenses', attendance: 'Attendance', notices: 'Notices', reports: 'Reports', settings: 'Settings',
         admins: 'Admins & Roles',
         home: 'Home', mySeat: 'My Seat', fees: 'Fees', profile: 'Profile', logout: 'Log out',
-        library: 'Library Info',
+        library: 'Library Info', more: 'More',
       },
       login: {
         adminTitle: 'Admin / Staff Login', studentTitle: 'Student Login', email: 'Email', password: 'Password',
@@ -83,7 +83,7 @@ const resources = {
         expenses: 'खर्च', attendance: 'उपस्थिति', notices: 'सूचनाएं', reports: 'रिपोर्ट', settings: 'सेटिंग्स',
         admins: 'एडमिन और भूमिकाएं',
         home: 'होम', mySeat: 'मेरी सीट', fees: 'शुल्क', profile: 'प्रोफ़ाइल', logout: 'लॉग आउट',
-        library: 'लाइब्रेरी जानकारी',
+        library: 'लाइब्रेरी जानकारी', more: 'और',
       },
       login: {
         adminTitle: 'एडमिन / स्टाफ लॉगिन', studentTitle: 'छात्र लॉगिन', email: 'ईमेल', password: 'पासवर्ड',
