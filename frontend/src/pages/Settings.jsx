@@ -197,6 +197,22 @@ export default function Settings() {
             <input className="input" type="time" value={settings.closing_time || ''} onChange={(e) => set('closing_time', e.target.value)} />
           </div>
         </div>
+        <div className="field">
+          <label>Receipt instructions</label>
+          <textarea
+            className="input"
+            rows={6}
+            style={{ fontFamily: 'monospace' }}
+            placeholder={'#Instruction\n1. Please arrive on time.\n2. कृपया अपना पहचान पत्र साथ लाएं।\n- Keep your ID card with you.'}
+            value={settings.receipt_instructions || ''}
+            onChange={(e) => set('receipt_instructions', e.target.value)}
+          />
+          <p style={{ fontSize: 12, color: 'var(--color-ink-soft)', marginTop: 4 }}>
+            Printed at the bottom of every payment receipt. Supports Hindi and English (mixed is fine), plus simple
+            markdown: a line starting with <code>#</code> is a heading, <code>1.</code> / <code>2.</code> makes a
+            numbered list, and <code>-</code> or <code>*</code> makes a bulleted list.
+          </p>
+        </div>
         <button className="btn btn-primary" disabled={saving} onClick={saveSettings}>
           {saving ? 'Saving…' : t('settingsPage.saveSettings')}
         </button>

@@ -225,9 +225,13 @@ class AllocationService {
     if (!resolvedAllocation) {
       return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, monthlyFee: null, paid: totalPaid, owed: 0 };
     }
+    const netMonthlyFee = financeService.computePayable({
+      baseFee: resolvedAllocation.monthly_fee,
+      discount: resolvedAllocation.discount || 0,
+    });
     const status = financeService.autoPaymentStatus({
       joinDate: resolvedAllocation.start_date,
-      monthlyFee: Number(resolvedAllocation.monthly_fee),
+      monthlyFee: netMonthlyFee,
       totalPaid,
     });
     return {

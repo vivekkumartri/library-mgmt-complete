@@ -1,7 +1,14 @@
+const path = require('path');
 const PDFDocument = require('pdfkit');
 const repos = require('../repositories');
 const { AppError } = require('../utils/AppError');
 const driveService = require('./googleDriveService');
+
+// Unicode font (Latin + Devanagari) used only for the admin-editable
+// "Instructions" block on the receipt — the built-in PDF core fonts
+// (Helvetica) have no Devanagari glyphs, so a library owner writing
+// instructions in Hindi would otherwise print as boxes/blanks.
+const INSTRUCTIONS_FONT_PATH = path.join(__dirname, '../../assets/fonts/NotoSansDevanagari-Regular.ttf');
 
 // A single neutral brand color used for the header band, the "PAID" stamp,
 // and table accents — deliberately not configurable per-library (the app
@@ -75,6 +82,70 @@ function amountToWords(amount) {
   words += ' Rupees';
   if (paise > 0) words += ` and ${twoDigitsToWords(paise)} Paise`;
   return `${words} Only`;
+}
+
+// Deliberately not a full markdown parser — the admin-facing "Instructions"
+// box only needs to support the handful of things a library owner actually
+// types: a heading line ("# Instructions" / "#Instruction"), numbered
+// ("1. ...") and bulleted ("- ..." / "* ...") lists, and plain lines.
+function parseInstructionLines(text) {
+  return String(text || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const heading = line.match(/^#{1,6}\s*(.*)$/);
+      if (heading) return { type: 'heading', text: heading[1] };
+      const numbered = line.match(/^(\d+)[.)]\s+(.*)$/);
+      if (numbered) return { type: 'numbered', marker: `${numbered[1]}.`, text: numbered[2] };
+      const bulleted = line.match(/^[-*]\s+(.*)$/);
+      if (bulleted) return { type: 'bullet', text: bulleted[1] };
+      return { type: 'text', text: line };
+    })
+    .filter((item) => item.text);
+}
+
+/**
+ * Draws the admin-editable instructions block starting at `y`, wrapping
+ * within `width` and paginating (a fresh page, continuing at the top
+ * margin) if it would run into the footer. Returns the y position after
+ * the block, and the page's current footer-safe boundary — both needed by
+ * the caller since either may have changed if a page break happened.
+ */
+function renderInstructions(doc, rawText, { x, y, width, marginX, footerLimit }) {
+  const items = parseInstructionLines(rawText);
+  if (!items.length) return { y, footerLimit };
+
+  let cursorY = y;
+  let footer = footerLimit;
+  doc.font(INSTRUCTIONS_FONT_PATH);
+
+  const ensureRoom = (lineHeight) => {
+    if (cursorY + lineHeight > footer) {
+      doc.addPage();
+      cursorY = 50;
+      footer = doc.page.height - 90;
+    }
+  };
+
+  for (const item of items) {
+    const indent = item.type === 'numbered' || item.type === 'bullet' ? 16 : 0;
+    const marker = item.type === 'numbered' ? item.marker : item.type === 'bullet' ? '•' : '';
+    const fontSize = item.type === 'heading' ? 11 : 9.5;
+    const color = item.type === 'heading' ? BRAND : INK;
+    const textWidth = width - indent;
+    const lineHeight = doc.font(INSTRUCTIONS_FONT_PATH).fontSize(fontSize).heightOfString(item.text, { width: textWidth }) + 6;
+
+    ensureRoom(lineHeight);
+
+    if (marker) {
+      doc.fillColor(color).text(marker, x, cursorY, { width: indent - 4 });
+    }
+    doc.fillColor(color).text(item.text, x + indent, cursorY, { width: textWidth });
+    cursorY += lineHeight;
+  }
+
+  return { y: cursorY + 4, footerLimit: footer };
 }
 
 /** Renders a payment receipt as a PDF buffer. */
@@ -271,6 +342,18 @@ async function buildReceiptPdf(paymentId) {
       doc.fillColor('#B91C1C').fontSize(9).font('Helvetica')
         .text(`This receipt was voided. Reason: ${payment.void_reason}`, marginX, y, { width: contentWidth });
       y += 20;
+    }
+
+    // ---- Instructions (admin-editable, Hindi/English, simple markdown) ----
+    if (settings.receipt_instructions) {
+      const rendered = renderInstructions(doc, settings.receipt_instructions, {
+        x: marginX,
+        y,
+        width: contentWidth,
+        marginX,
+        footerLimit: doc.page.height - 90,
+      });
+      y = rendered.y;
     }
 
     // ---- Footer ----

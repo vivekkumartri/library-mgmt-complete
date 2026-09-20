@@ -1,9 +1,15 @@
 jest.mock('../src/repositories', () => {
-  const store = { Seats: [], Seat_Allocations: [] };
+  const store = { Seats: [], Seat_Allocations: [], Payments: [] };
   return {
     __store: store,
     seats: {
       findById: jest.fn(async (id) => store.Seats.find((s) => s.seat_id === id) || null),
+    },
+    payments: {
+      findAll: jest.fn(async (filterFn) => {
+        const rows = store.Payments;
+        return filterFn ? rows.filter(filterFn) : rows;
+      }),
     },
     allocations: {
       findAll: jest.fn(async (filterFn) => {
@@ -32,6 +38,7 @@ const { AllocationService, timesOverlap } = require('../src/services/allocationS
 function resetStore() {
   repos.__store.Seats.length = 0;
   repos.__store.Seat_Allocations.length = 0;
+  repos.__store.Payments.length = 0;
 }
 
 describe('timesOverlap', () => {
@@ -134,5 +141,50 @@ describe('AllocationService business rules', () => {
         { id: 'admin1' }
       )
     ).rejects.toMatchObject({ code: 'INVALID_TIME_RANGE' });
+  });
+});
+
+describe('AllocationService.paymentStatusForStudent — discount handling', () => {
+  beforeEach(() => {
+    resetStore();
+  });
+
+  test('a discounted student who pays their full discounted fee is covered for a full 30 days, not marked as underpaid against the sticker fee', async () => {
+    const allocation = {
+      allocation_id: 'A1',
+      student_id: 'S1',
+      start_date: '2026-09-01',
+      monthly_fee: 500,
+      discount: 200,
+    };
+    repos.__store.Payments.push({
+      student_id: 'S1',
+      status: 'active',
+      amount: 300,
+    });
+
+    const result = await AllocationService.paymentStatusForStudent('S1', allocation);
+
+    expect(result.dueDate).toBe('2026-10-01');
+    expect(result.amountDue).toBe(0);
+  });
+
+  test('same student paid against the undiscounted fee would incorrectly read as underpaid (regression guard)', async () => {
+    const allocation = {
+      allocation_id: 'A1',
+      student_id: 'S1',
+      start_date: '2026-09-01',
+      monthly_fee: 500,
+      discount: 0,
+    };
+    repos.__store.Payments.push({
+      student_id: 'S1',
+      status: 'active',
+      amount: 300,
+    });
+
+    const result = await AllocationService.paymentStatusForStudent('S1', allocation);
+
+    expect(result.dueDate).not.toBe('2026-10-01');
   });
 });
