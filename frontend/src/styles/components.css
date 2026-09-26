@@ -196,6 +196,133 @@ textarea.input { height: auto; padding: var(--space-3); }
   gap: var(--space-2);
 }
 
+/* ---- Seat map chrome: legend, toolbar, summary strip ---- */
+
+.seat-legend-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.seat-legend-row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.seat-legend-row-payment {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.seat-legend-caption {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.seat-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.seat-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.seat-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  height: 36px;
+  min-width: 180px;
+}
+
+.seat-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  color: var(--color-ink);
+}
+
+.seat-filter-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.seat-filter-pill {
+  border: none;
+  background: transparent;
+  color: var(--color-ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+}
+
+.seat-filter-pill.is-active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.seat-zoom-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.seat-summary-strip {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.seat-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-summary-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.seat-summary-label {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.seat-summary-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
 /* Floors with rows of different widths render as one flex row per row,
    each holding that row's own seat count — a single CSS grid can't do
    this since it needs one column count for every row. */
@@ -281,10 +408,18 @@ textarea.input { height: auto; padding: var(--space-3); }
   cursor: pointer;
   padding: 3px 9px;
   border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
 .seat-number-btn:hover {
   background: rgba(0, 0, 0, 0.06);
+}
+
+.seat-number-label {
+  line-height: 1;
 }
 
 .seat-due-date {
@@ -293,6 +428,10 @@ textarea.input { height: auto; padding: var(--space-3); }
   color: var(--color-ink-soft);
   text-align: center;
   line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
 }
 
 .seat-quick-attendance {

@@ -3,7 +3,31 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
 import SeatDetailDrawer from '../components/SeatDetailDrawer';
+import ChairIcon from '../components/icons/ChairIcon';
+import { CalendarIcon, SearchIcon, AlertIcon, ClockIcon, BanIcon } from '../components/icons/MiniIcons';
 import { formatDate } from '../utils/formatDate';
+
+/** The chair-icon color for each status/urgency class — one place so the
+ * legend, every seat card, and the summary strip's icons all agree. */
+const STATUS_ICON_COLOR = {
+  available: 'var(--color-success)',
+  occupied: 'var(--color-info)',
+  partial: 'var(--color-warning)',
+  disabled: 'var(--color-ink-soft)',
+  conflict: 'var(--color-danger)',
+  'urgency-due_soon': 'var(--color-warning)',
+  'urgency-due_today': 'var(--color-due-today)',
+  'urgency-overdue': 'var(--color-danger)',
+};
+
+function seatIconColor(colorCls) {
+  // colorCls is e.g. "occupied urgency-overdue" — the urgency tier (if any)
+  // always wins over the plain structural color, same precedence the fill
+  // color itself already uses.
+  const classes = colorCls.split(' ');
+  const urgencyClass = classes.find((c) => c.startsWith('urgency-'));
+  return STATUS_ICON_COLOR[urgencyClass] || STATUS_ICON_COLOR[classes[0]] || 'var(--color-ink-soft)';
+}
 
 const URGENCY_RANK = { overdue: 3, due_today: 2, due_soon: 1, ok: 0 };
 
@@ -188,45 +212,47 @@ export default function SeatMap() {
 
       {!loading && !error && floors.length > 0 && (
         <>
-          <div className="card" style={{ marginBottom: 16 }}>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
-              <LegendDot cls="available" label={t('seats.available')} />
-              <LegendDot cls="occupied" label={t('seats.occupied')} />
-              <LegendDot cls="partial" label="Multiple students" />
-              <LegendDot cls="conflict" label={t('seats.conflict')} />
-              <LegendDot cls="disabled" label={t('seats.disabled')} />
+          <div className="card seat-legend-card" style={{ marginBottom: 16 }}>
+            <div className="seat-legend-row">
+              <LegendChip cls="available" label={t('seats.available')} />
+              <LegendChip cls="occupied" label={t('seats.occupied')} />
+              <LegendChip cls="partial" label="Multiple students" />
+              <LegendChip cls="conflict" label={t('seats.conflict')} />
+              <LegendChip cls="disabled" label={t('seats.disabled')} />
             </div>
-            <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13, marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--color-border)' }}>
-              <span style={{ color: 'var(--color-ink-soft)' }}>Occupied seat color = payment status:</span>
-              <LegendDot cls="occupied" label="Paid up / not due yet" />
-              <LegendDot cls="occupied urgency-due_soon" label="Due within 7 days" />
-              <LegendDot cls="occupied urgency-due_today" label="Due today" />
-              <LegendDot cls="occupied urgency-overdue" label="Overdue" />
+            <div className="seat-legend-row seat-legend-row-payment">
+              <span className="seat-legend-caption">Occupied seat color = payment status:</span>
+              <LegendChip cls="occupied" label="Paid up / not due yet" />
+              <LegendChip cls="occupied urgency-due_soon" label="Due within 7 days" />
+              <LegendChip cls="occupied urgency-due_today" label="Due today" />
+              <LegendChip cls="occupied urgency-overdue" label="Overdue" />
             </div>
           </div>
 
-          <div className="card" style={{ marginBottom: 16, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
-            <input
-              className="input"
-              style={{ maxWidth: 200 }}
-              placeholder={t('seats.lookupPlaceholder', 'Find seat #')}
-              value={seatQuery}
-              onChange={(e) => setSeatQuery(e.target.value)}
-              aria-label={t('seats.lookupPlaceholder', 'Find seat #')}
-            />
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="card seat-toolbar" style={{ marginBottom: 16 }}>
+            <div className="seat-search-field">
+              <SearchIcon size={16} color="var(--color-ink-soft)" />
+              <input
+                className="seat-search-input"
+                placeholder={t('seats.lookupPlaceholder', 'Find seat #')}
+                value={seatQuery}
+                onChange={(e) => setSeatQuery(e.target.value)}
+                aria-label={t('seats.lookupPlaceholder', 'Find seat #')}
+              />
+            </div>
+            <div className="seat-filter-pills">
               {STATUS_FILTERS.map((s) => (
                 <button
                   key={s}
-                  className={`btn ${statusFilter === s ? 'btn-primary' : 'btn-outline'}`}
-                  style={{ padding: '0 10px', height: 32, fontSize: 12 }}
+                  type="button"
+                  className={`seat-filter-pill ${statusFilter === s ? 'is-active' : ''}`}
                   onClick={() => setStatusFilter(s)}
                 >
                   {s === 'all' ? t('common.all', 'All') : t(`seats.${s}`, s)}
                 </button>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center', marginLeft: 'auto' }}>
+            <div className="seat-zoom-controls">
               <button
                 className="btn btn-outline"
                 style={{ width: 32, height: 32, padding: 0 }}
@@ -297,11 +323,20 @@ export default function SeatMap() {
                         return (
                           <div key={seat.seat_id} className={`seat-cell ${colorCls}${timeline.length > 0 ? ' has-occupant' : ''}`} title={label}>
                             <button type="button" className="seat-number-btn" onClick={() => setSelectedSeat(seat)} aria-label={label}>
-                              {seat.seat_number}
+                              <ChairIcon color={seatIconColor(colorCls)} size={timeline.length > 0 ? 22 : 26} />
+                              <span className="seat-number-label">{seat.seat_number}</span>
                             </button>
                             {timeline.length > 0 && (
                               <>
-                                <div className="seat-due-date">{dueDate ? `Due ${formatDate(dueDate)}` : 'No dues'}</div>
+                                <div className="seat-due-date">
+                                  {dueDate ? (
+                                    <>
+                                      <CalendarIcon size={11} /> Due {formatDate(dueDate)}
+                                    </>
+                                  ) : (
+                                    'No dues'
+                                  )}
+                                </div>
                                 {soleOccupant ? (
                                   <div className="seat-quick-attendance">
                                     <button
@@ -336,6 +371,8 @@ export default function SeatMap() {
               </div>
             )}
           </div>
+
+          <SeatSummaryStrip seats={seats} />
         </>
       )}
 
@@ -351,11 +388,52 @@ export default function SeatMap() {
   );
 }
 
-function LegendDot({ cls, label }) {
+function LegendChip({ cls, label }) {
   return (
-    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-      <span className={`seat-cell ${cls}`} style={{ width: 18, height: 18, minHeight: 0, aspectRatio: 'auto' }} />
+    <span className="seat-legend-chip">
+      <ChairIcon color={seatIconColor(cls)} size={16} />
       {label}
     </span>
+  );
+}
+
+/**
+ * The floor's overall counts at a glance, below the seat grid — always
+ * reflects the whole floor (not whatever the search/filter above narrowed
+ * the grid down to), since "how many seats are overdue on this floor" is a
+ * different question from "how many of my current search results are".
+ */
+function SeatSummaryStrip({ seats }) {
+  const disabled = seats.filter((s) => s.status === 'disabled');
+  const enabled = seats.filter((s) => s.status !== 'disabled');
+  const available = enabled.filter((s) => (s.timeline || []).length === 0);
+  const occupied = enabled.filter((s) => (s.timeline || []).length > 0);
+  const worstUrgency = (s) => seatPaymentUrgency(s);
+  const dueSoon = occupied.filter((s) => worstUrgency(s) === 'due_soon').length;
+  const dueToday = occupied.filter((s) => worstUrgency(s) === 'due_today').length;
+  const overdue = occupied.filter((s) => worstUrgency(s) === 'overdue').length;
+
+  return (
+    <div className="card seat-summary-strip">
+      <SummaryStat icon={<ChairIcon color="var(--color-ink-soft)" size={22} />} label="Total Seats" value={seats.length} />
+      <SummaryStat icon={<ChairIcon color="var(--color-success)" size={22} />} label="Available" value={available.length} valueColor="var(--color-success)" />
+      <SummaryStat icon={<ChairIcon color="var(--color-info)" size={22} />} label="Occupied" value={occupied.length} valueColor="var(--color-info)" />
+      <SummaryStat icon={<ClockIcon color="var(--color-warning)" size={22} />} label="Due within 7 days" value={dueSoon} valueColor="var(--color-warning)" />
+      <SummaryStat icon={<ClockIcon color="var(--color-due-today)" size={22} />} label="Due today" value={dueToday} valueColor="var(--color-due-today)" />
+      <SummaryStat icon={<AlertIcon color="var(--color-danger)" size={22} />} label="Overdue" value={overdue} valueColor="var(--color-danger)" />
+      <SummaryStat icon={<BanIcon color="var(--color-ink-soft)" size={22} />} label="Disabled" value={disabled.length} />
+    </div>
+  );
+}
+
+function SummaryStat({ icon, label, value, valueColor }) {
+  return (
+    <div className="seat-summary-stat">
+      <span className="seat-summary-icon">{icon}</span>
+      <div>
+        <div className="seat-summary-label">{label}</div>
+        <div className="seat-summary-value" style={valueColor ? { color: valueColor } : undefined}>{value}</div>
+      </div>
+    </div>
   );
 }
