@@ -82,7 +82,14 @@ export default function Dashboard() {
       </div>
 
       <h3>{t('dashboard.paymentDue')}</h3>
-      <div className="card" style={{ marginBottom: 24 }}>
+      <div
+        className="card"
+        style={{
+          marginBottom: 24,
+          maxHeight: paymentDue.length > 5 ? 420 : undefined,
+          overflowY: paymentDue.length > 5 ? 'auto' : undefined,
+        }}
+      >
         {paymentDue.length === 0 && <p style={{ color: 'var(--color-ink-soft)' }}>{t('common.noResults')}</p>}
         {paymentDue.map((p) => (
           <div className="list-item" key={p.billingId || `auto-${p.studentId}`}>
