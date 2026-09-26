@@ -85,12 +85,22 @@ router.get(
       const admin = await repos.admins.findById(req.user.id);
       if (!admin) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Admin not found.' } });
       const { password_hash, ...safe } = admin;
-      return res.json({ user: { ...safe, type: 'admin' } });
+      // Same fix as the student branch below — adminLogin's response uses
+      // `id` (authService.js), and the frontend relies on user.id (e.g.
+      // Admins.jsx hides an admin's own deactivate/delete controls by
+      // comparing a.admin_id !== user.id).
+      return res.json({ user: { ...safe, id: admin.admin_id, type: 'admin' } });
     }
     const student = await repos.students.findById(req.user.id);
     if (!student) return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Student not found.' } });
     const { password_hash, ...safe } = student;
-    res.json({ user: { ...safe, type: 'student' } });
+    // Must match studentLogin's response shape (authService.js) — `id`, not
+    // just the raw `student_id` column — since the frontend stores this
+    // straight into its user object and calls like GET /students/:id use
+    // user.id as :id. Without `id` here, a page refresh (which re-runs this
+    // /me call) replaces the correct id from login with undefined, and every
+    // "your own record" self-access check then 403s.
+    res.json({ user: { ...safe, id: student.student_id, type: 'student' } });
   })
 );
 

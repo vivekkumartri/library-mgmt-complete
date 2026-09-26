@@ -11,6 +11,8 @@ export function StudentHome() {
   const { user } = useAuth();
   const [notices, setNotices] = useState([]);
   const [allocation, setAllocation] = useState(null);
+  const [billing, setBilling] = useState([]);
+  const [autoStatus, setAutoStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -18,18 +20,22 @@ export function StudentHome() {
     setLoading(true);
     setError('');
     try {
-      const [n, a] = await Promise.all([
+      const [n, a, b, ps] = await Promise.all([
         api.get('/notices'),
         api.get('/allocations', { params: { status: 'active' } }),
+        api.get('/billing'),
+        api.get(`/students/${user.id}/payment-status`),
       ]);
       setNotices(n.data.notices);
       setAllocation(a.data.allocations[0] || null);
+      setBilling(b.data.billing);
+      setAutoStatus(ps.data);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -37,6 +43,20 @@ export function StudentHome() {
 
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={load} />;
+
+  // Prefer an actual Monthly_Billing record when one exists — same
+  // due_date-vs-today rule as everywhere else — since an admin-entered bill
+  // can carry a discount/override the automatic calculation doesn't know
+  // about. Most students have no billing record at all (manual billing
+  // creation isn't part of the admin UI anymore), so fall back to the
+  // automatic per-allocation status (the same one the seat map uses) —
+  // without this fallback, most students would never see a due date here.
+  const today = new Date().toISOString().slice(0, 10);
+  const unpaidBills = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && b.due_date);
+  const nextBill = unpaidBills.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0] || null;
+  const dueDate = nextBill ? nextBill.due_date : autoStatus?.dueDate || null;
+  const amountDue = nextBill ? Math.max(0, Number(nextBill.payable) - Number(nextBill.paid)) : autoStatus?.amountDue || 0;
+  const urgency = dueDate ? (dueDate < today ? 'overdue' : dueDate === today ? 'due_today' : 'upcoming') : null;
 
   return (
     <div>
@@ -54,6 +74,24 @@ export function StudentHome() {
         </div>
       ) : (
         <div className="card" style={{ marginBottom: 16, color: 'var(--color-ink-soft)' }}>{t('studentPortal.noAllocation')}</div>
+      )}
+
+      {dueDate && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="stat-label">Payment due date</div>
+          <div className="stat-value">{formatDate(dueDate)}</div>
+          <p style={{ color: 'var(--color-ink-soft)', marginTop: 4 }}>
+            {amountDue > 0 ? `₹${amountDue} due` : 'Nothing currently due'}
+            {urgency && (
+              <>
+                {' '}
+                <span className={`badge ${urgency === 'overdue' ? 'badge-danger' : urgency === 'due_today' ? 'badge-warning' : 'badge-neutral'}`}>
+                  {urgency === 'overdue' ? 'overdue' : urgency === 'due_today' ? 'due today' : 'upcoming'}
+                </span>
+              </>
+            )}
+          </p>
+        </div>
       )}
 
       <h3>{t('nav.notices')}</h3>
