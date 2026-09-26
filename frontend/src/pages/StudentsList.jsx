@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Link, useNavigate } from 'react-router-dom';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
+import { formatDate } from '../utils/formatDate';
 
 const URGENCY_BADGE_CLASS = {
   overdue: 'badge-danger',
@@ -61,8 +62,8 @@ export default function StudentsList({ statusFilter = 'active' }) {
                 <strong>{s.full_name}</strong>
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
                   {s.student_id} · {s.mobile}
-                  {statusFilter !== 'active' && s.leaving_date ? ` · Left ${s.leaving_date}` : ''}
-                  {s.paymentDueDate ? ` · Due ${s.paymentDueDate}` : ''}
+                  {statusFilter !== 'active' && s.leaving_date ? ` · Left ${formatDate(s.leaving_date)}` : ''}
+                  {s.paymentDueDate ? ` · Due ${formatDate(s.paymentDueDate)}` : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

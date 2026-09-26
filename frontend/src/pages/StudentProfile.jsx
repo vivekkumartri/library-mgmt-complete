@@ -191,7 +191,7 @@ export default function StudentProfile() {
       {paymentStatus?.dueDate && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="stat-label">Payment due date</div>
-          <div className="stat-value">{paymentStatus.dueDate}</div>
+          <div className="stat-value">{formatDate(paymentStatus.dueDate)}</div>
           <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', margin: '4px 0 0' }}>
             Worked out automatically from their joining date and monthly fee — no billing record required.
             {paymentStatus.balance > 0 ? ` Currently ₹${paymentStatus.balance} due.` : ' Nothing currently due.'}
@@ -258,7 +258,7 @@ export default function StudentProfile() {
           <Row label="Mobile" value={student.mobile} />
           <Row label="Alternate mobile" value={student.alternate_mobile} />
           <Row label="Email" value={student.email} />
-          <Row label="Date of birth" value={student.date_of_birth} />
+          <Row label="Date of birth" value={formatDate(student.date_of_birth)} />
           <Row label="Joining date" value={formatDate(student.joining_date)} />
           <Row label="Address" value={student.address} />
           <Row label="ID proof" value={student.id_proof_details} />
@@ -294,7 +294,7 @@ export default function StudentProfile() {
             </p>
           )}
           {student.status === 'past' && student.leaving_date && (
-            <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 8 }}>Left on {student.leaving_date}</p>
+            <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 8 }}>Left on {formatDate(student.leaving_date)}</p>
           )}
           {showEditProfile && (
             <EditProfileDrawer
@@ -402,7 +402,7 @@ export default function StudentProfile() {
           {currentFee ? (
             <p style={{ margin: '0 0 8px' }}>
               ₹{currentFee.monthly_fee}/month
-              {Number(currentFee.discount) > 0 ? ` (₹${currentFee.discount} discount)` : ''} — effective since {currentFee.effective_from}
+              {Number(currentFee.discount) > 0 ? ` (₹${currentFee.discount} discount)` : ''} — effective since {formatDate(currentFee.effective_from)}
             </p>
           ) : (
             <p style={{ color: 'var(--color-ink-soft)', margin: '0 0 8px' }}>No fee plan set yet.</p>
@@ -414,7 +414,7 @@ export default function StudentProfile() {
                 <div className="list-item" key={f.fee_plan_id}>
                   <span>₹{f.monthly_fee}{Number(f.discount) > 0 ? ` (−₹${f.discount})` : ''}</span>
                   <span style={{ color: 'var(--color-ink-soft)', fontSize: 13 }}>
-                    {f.effective_from} → {f.effective_to || 'ongoing'}
+                    {formatDate(f.effective_from)} → {f.effective_to ? formatDate(f.effective_to) : 'ongoing'}
                   </span>
                 </div>
               ))}
@@ -475,7 +475,7 @@ export default function StudentProfile() {
             .map((v) => (
               <div className="list-item" key={v.vacation_id}>
                 <span>
-                  {v.start_date} → {v.end_date}
+                  {formatDate(v.start_date)} → {formatDate(v.end_date)}
                 </span>
                 <span style={{ color: 'var(--color-ink-soft)' }}>{v.reason || '—'}</span>
               </div>

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
 import SeatDetailDrawer from '../components/SeatDetailDrawer';
+import { formatDate } from '../utils/formatDate';
 
 const URGENCY_RANK = { overdue: 3, due_today: 2, due_soon: 1, ok: 0 };
 
@@ -300,7 +301,7 @@ export default function SeatMap() {
                             </button>
                             {timeline.length > 0 && (
                               <>
-                                <div className="seat-due-date">{dueDate ? `Due ${dueDate}` : 'No dues'}</div>
+                                <div className="seat-due-date">{dueDate ? `Due ${formatDate(dueDate)}` : 'No dues'}</div>
                                 {soleOccupant ? (
                                   <div className="seat-quick-attendance">
                                     <button

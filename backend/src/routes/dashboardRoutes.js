@@ -53,9 +53,15 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const month = req.query.month || new Date().toISOString().slice(0, 7);
-    // One batched Sheets API call for all three tabs, same pattern as /today.
-    const { billing, payments, expenses } = await repos.readMany({
+    // One batched Sheets API call for all four tabs, same pattern as /today.
+    // Overdue amounts deliberately are NOT scoped to `month` below — a bill
+    // from a prior month that's still unpaid is overdue regardless of which
+    // month the admin happens to be viewing (same all-months scan /payment-due
+    // already does), otherwise it silently disappears the moment the calendar
+    // rolls over to the next month.
+    const { billing, allUnpaidBilling, payments, expenses } = await repos.readMany({
       billing: ['billing', (b) => b.billing_month === month],
+      allUnpaidBilling: ['billing', (b) => ['pending', 'partially_paid', 'overdue'].includes(b.status)],
       payments: ['payments', (p) => p.status === 'active' && (p.payment_date || '').startsWith(month)],
       expenses: ['expenses', (e) => (e.date || '').startsWith(month) && e.status !== 'void'],
     });
@@ -66,10 +72,15 @@ router.get(
     // Don't trust the stored `status` column alone — a bill can sit at
     // 'pending' past its due_date if nothing has re-run status maintenance.
     // Same due_date-vs-today rule as /payment-due, so the two endpoints agree.
-    const unpaidBills = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status));
     const isOverdue = (b) => b.due_date && b.due_date < today;
-    const pending = finance.sumAmounts(unpaidBills.filter((b) => !isOverdue(b)).map((b) => Number(b.payable) - Number(b.paid)));
-    const overdue = finance.sumAmounts(unpaidBills.filter(isOverdue).map((b) => Number(b.payable) - Number(b.paid)));
+    const pending = finance.sumAmounts(
+      billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && !isOverdue(b))
+        .map((b) => Number(b.payable) - Number(b.paid))
+    );
+    // Overdue is summed across ALL months' unpaid bills, not just this one —
+    // pending is still scoped to the selected month since "not yet due" only
+    // makes sense in the context of the month being reviewed.
+    const overdue = finance.sumAmounts(allUnpaidBilling.filter(isOverdue).map((b) => Number(b.payable) - Number(b.paid)));
     const totalExpenses = finance.sumAmounts(expenses.map((e) => Number(e.amount)));
 
     res.json({

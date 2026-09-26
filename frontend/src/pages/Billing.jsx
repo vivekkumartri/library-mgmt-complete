@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
 import StudentSearchPicker from '../components/StudentSearchPicker';
+import { formatDate } from '../utils/formatDate';
 
 /** Shown after a payment is successfully recorded, in place of the form,
  * so the receipt is one click away instead of requiring a trip to the
@@ -241,10 +242,10 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
         const [y, m, d] = status.paidThroughDate.split('-').map(Number);
         const nextDayUtc = new Date(Date.UTC(y, m - 1, d + 1));
         setPeriodStart(nextDayUtc.toISOString().slice(0, 10));
-        setStatusNotice(`Currently paid through ${status.paidThroughDate}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
+        setStatusNotice(`Currently paid through ${formatDate(status.paidThroughDate)}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
       } else if (status.joinDate) {
         setPeriodStart(status.joinDate);
-        setStatusNotice(`No payments on file yet — prefilled from their joining date (${status.joinDate}).`);
+        setStatusNotice(`No payments on file yet — prefilled from their joining date (${formatDate(status.joinDate)}).`);
       } else {
         setStatusNotice('No active seat allocation on file — enter the period manually.');
       }

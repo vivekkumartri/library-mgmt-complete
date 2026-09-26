@@ -222,8 +222,9 @@ class AllocationService {
       repos.payments.findAll((p) => p.student_id === studentId && p.status === 'active'),
     ]);
     const totalPaid = financeService.sumAmounts(payments.map((p) => Number(p.amount)));
+    const lastPaymentDate = payments.reduce((latest, p) => (p.payment_date && p.payment_date > (latest || '') ? p.payment_date : latest), null);
     if (!resolvedAllocation) {
-      return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, monthlyFee: null, paid: totalPaid, owed: 0 };
+      return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, monthlyFee: null, paid: totalPaid, owed: 0, lastPaymentDate };
     }
     const netMonthlyFee = financeService.computePayable({
       baseFee: resolvedAllocation.monthly_fee,
@@ -242,6 +243,7 @@ class AllocationService {
       monthlyFee: Number(resolvedAllocation.monthly_fee),
       paid: status.paid,
       owed: status.owed,
+      lastPaymentDate,
     };
   }
 
@@ -272,6 +274,7 @@ class AllocationService {
           paymentUrgency: payment.urgency,
           paymentDueDate: payment.dueDate,
           paymentAmountDue: payment.amountDue,
+          lastPaymentDate: payment.lastPaymentDate,
         };
       })
     );

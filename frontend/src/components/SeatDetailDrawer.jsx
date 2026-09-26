@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import AllocateForm from './AllocateForm';
 import EndAllocationDrawer from './EndAllocationDrawer';
+import { formatDate } from '../utils/formatDate';
 
 const URGENCY_LABEL = {
   overdue: 'Payment overdue',
@@ -113,11 +114,15 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
                   <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
                     {a.startTime} – {a.endTime} · ₹{a.monthlyFee}/month
                   </div>
+                  <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
+                    Joined {formatDate(a.startDate)}
+                    {a.lastPaymentDate ? ` · Last payment ${formatDate(a.lastPaymentDate)}` : ' · No payments yet'}
+                  </div>
                   {a.paymentUrgency && a.paymentUrgency !== 'ok' && (
                     <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <span className={`badge ${URGENCY_BADGE_CLASS[a.paymentUrgency]}`}>
                         {URGENCY_LABEL[a.paymentUrgency]}
-                        {a.paymentDueDate ? ` (${a.paymentDueDate})` : ''}
+                        {a.paymentDueDate ? ` (${formatDate(a.paymentDueDate)})` : ''}
                       </span>
                       {a.paymentAmountDue ? (
                         <span style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>₹{a.paymentAmountDue} due</span>

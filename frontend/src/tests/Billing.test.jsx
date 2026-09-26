@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Billing from '../pages/Billing';
+import { formatDate } from '../utils/formatDate';
 import '../i18n';
 
 vi.mock('../services/api', () => {
@@ -161,7 +162,7 @@ describe('Billing page', () => {
     await waitFor(() => screen.getByText(/Rahul Kumar/i));
     fireEvent.click(screen.getByText(/Rahul Kumar/i));
 
-    await waitFor(() => expect(screen.getByText(/Currently paid through 2026-09-01/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(new RegExp(`Currently paid through ${formatDate('2026-09-01')}`))).toBeInTheDocument());
     const [fromInput] = document.querySelectorAll('input[type="date"]');
     // The day after their existing coverage ends, not the join date, since they've already paid once.
     expect(fromInput.value).toBe('2026-09-02');

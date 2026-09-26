@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api, { apiErrorMessage } from '../services/api';
+import { formatDate } from '../utils/formatDate';
 
 /**
  * Dedicated "student leaving" flow (spec section 51/56): actual leaving
@@ -35,7 +36,7 @@ export default function EndAllocationDrawer({ allocation, studentName, onClose, 
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
         <h3>End allocation{studentName ? ` — ${studentName}` : ''}</h3>
         <p style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-          {allocation.start_time}–{allocation.end_time}, since {allocation.start_date}. Ending this preserves the full
+          {allocation.start_time}–{allocation.end_time}, since {formatDate(allocation.start_date)}. Ending this preserves the full
           allocation, payment, and attendance history — it does not delete anything. If the student has no other active
           allocation, they'll move to Past Students.
         </p>
@@ -68,7 +69,7 @@ export default function EndAllocationDrawer({ allocation, studentName, onClose, 
           <>
             <div className="card" style={{ background: 'var(--color-warning-soft)', marginBottom: 12 }}>
               <p style={{ margin: 0 }}>
-                Confirm ending this allocation as of <strong>{actualEndDate}</strong>? This frees up the seat for that time slot.
+                Confirm ending this allocation as of <strong>{formatDate(actualEndDate)}</strong>? This frees up the seat for that time slot.
               </p>
             </div>
             {error && <p style={{ color: 'var(--color-danger)', fontSize: 13 }}>{error}</p>}

@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '../i18n';
 import SeatMap from '../pages/SeatMap';
+import { formatDate } from '../utils/formatDate';
 
 vi.mock('../services/api', () => {
   const get = vi.fn();
@@ -44,7 +45,7 @@ describe('SeatMap — due date and quick attendance on each seat', () => {
   test('shows the due date on an occupied seat', async () => {
     mockLoad([soloSeat, emptySeat]);
     render(<SeatMap />);
-    await waitFor(() => expect(screen.getByText('Due 2026-08-01')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(`Due ${formatDate('2026-08-01')}`)).toBeInTheDocument());
   });
 
   test('an empty seat shows no due date or attendance controls', async () => {
@@ -59,7 +60,7 @@ describe('SeatMap — due date and quick attendance on each seat', () => {
     mockLoad([soloSeat]);
     api.post.mockResolvedValueOnce({ data: { attendance: { student_id: 'LIB-2026-0001', status: 'present' } } });
     render(<SeatMap />);
-    await waitFor(() => expect(screen.getByText('Due 2026-08-01')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(`Due ${formatDate('2026-08-01')}`)).toBeInTheDocument());
 
     fireEvent.click(screen.getByText('Present'));
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
+import { formatDate } from '../utils/formatDate';
 
 export default function Notices() {
   const { t } = useTranslation();
@@ -59,7 +60,9 @@ export default function Notices() {
                 {n.title_hi && <span style={{ color: 'var(--color-ink-soft)' }}> · {n.title_hi}</span>}
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
                   {n.description_en}
-                  {n.publish_date || n.expiry_date ? ` (${n.publish_date || 'now'} → ${n.expiry_date || 'no expiry'})` : ''}
+                  {n.publish_date || n.expiry_date
+                    ? ` (${n.publish_date ? formatDate(n.publish_date) : 'now'} → ${n.expiry_date ? formatDate(n.expiry_date) : 'no expiry'})`
+                    : ''}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
