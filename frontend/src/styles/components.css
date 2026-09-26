@@ -214,7 +214,7 @@ textarea.input { height: auto; padding: var(--space-3); }
 }
 
 .seat-map-row .seat-cell {
-  width: var(--seat-cell-size, 112px);
+  width: var(--seat-cell-size, 78px);
   flex: 0 0 auto;
 }
 
@@ -222,7 +222,7 @@ textarea.input { height: auto; padding: var(--space-3); }
    headcount note) — noticeably wider than a bare available/disabled square
    so "Present"/"Absent" never clip or overlap. */
 .seat-map-row .seat-cell.has-occupant {
-  width: var(--seat-cell-size-occupied, 152px);
+  width: var(--seat-cell-size-occupied, 106px);
 }
 
 /* "3D block" look: a raised keycap/tile rendered with layered shadows
@@ -232,34 +232,34 @@ textarea.input { height: auto; padding: var(--space-3); }
    toward its base color, like a physical button being pushed in. */
 .seat-cell {
   aspect-ratio: 1;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-sm);
   border: 1.5px solid var(--color-border);
   background: var(--color-surface);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
   font-weight: 700;
-  font-size: 20px;
-  min-height: var(--seat-cell-size, 112px);
-  padding: 8px;
+  font-size: 15px;
+  min-height: var(--seat-cell-size, 78px);
+  padding: 6px;
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.5),
-    inset 0 -4px 0 rgba(0, 0, 0, 0.08),
-    0 6px 0 var(--seat-block-edge, var(--color-border)),
-    0 8px 10px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.08),
+    0 4px 0 var(--seat-block-edge, var(--color-border)),
+    0 6px 7px rgba(0, 0, 0, 0.12);
   transform: translateY(0);
   transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 
 .seat-cell:active {
-  transform: translateY(4px);
+  transform: translateY(3px);
   box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.35),
-    inset 0 -2px 0 rgba(0, 0, 0, 0.08),
-    0 2px 0 var(--seat-block-edge, var(--color-border)),
-    0 3px 4px rgba(0, 0, 0, 0.12);
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 var(--seat-block-edge, var(--color-border)),
+    0 2px 3px rgba(0, 0, 0, 0.12);
 }
 
 /* An occupied/shared seat shows its due date and (for a single occupant)
@@ -267,9 +267,9 @@ textarea.input { height: auto; padding: var(--space-3); }
    available/disabled seats stay compact squares. */
 .seat-cell.has-occupant {
   aspect-ratio: auto;
-  min-height: 190px;
+  min-height: 133px;
   justify-content: flex-start;
-  padding-top: 14px;
+  padding-top: 10px;
 }
 
 .seat-number-btn {
@@ -277,9 +277,9 @@ textarea.input { height: auto; padding: var(--space-3); }
   background: transparent;
   color: inherit;
   font-weight: 700;
-  font-size: 20px;
+  font-size: 15px;
   cursor: pointer;
-  padding: 4px 12px;
+  padding: 3px 9px;
   border-radius: var(--radius-sm);
 }
 
@@ -288,7 +288,7 @@ textarea.input { height: auto; padding: var(--space-3); }
 }
 
 .seat-due-date {
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 400;
   color: var(--color-ink-soft);
   text-align: center;
@@ -297,8 +297,8 @@ textarea.input { height: auto; padding: var(--space-3); }
 
 .seat-quick-attendance {
   display: flex;
-  gap: 6px;
-  margin-top: 4px;
+  gap: 4px;
+  margin-top: 3px;
   width: 100%;
   justify-content: center;
 }
@@ -307,10 +307,10 @@ textarea.input { height: auto; padding: var(--space-3); }
   border: 1px solid var(--color-border);
   background: var(--color-surface);
   color: var(--color-ink);
-  border-radius: 6px;
-  font-size: 11px;
+  border-radius: 5px;
+  font-size: 9px;
   font-weight: 700;
-  padding: 5px 8px;
+  padding: 3px 6px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -333,7 +333,7 @@ textarea.input { height: auto; padding: var(--space-3); }
 }
 
 .seat-quick-note {
-  font-size: 12px;
+  font-size: 9px;
   font-weight: 400;
   color: var(--color-ink-soft);
 }

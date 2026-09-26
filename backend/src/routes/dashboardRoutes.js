@@ -6,6 +6,53 @@ const finance = require('../services/financeService');
 
 const router = express.Router();
 
+/**
+ * Most students have no Monthly_Billing row at all — the "New billing
+ * record" UI was removed and the automatic, billing-record-free calculation
+ * (financeService.autoPaymentStatus, the same one the seat map already uses)
+ * is how their due/overdue status actually lives. Reading Monthly_Billing
+ * alone here would show ₹0 overdue even with real overdue students, so this
+ * computes each active student's auto status directly from their current
+ * allocation + total payments — one batched read, no per-student round trip
+ * — and callers merge it with any actual Monthly_Billing rows.
+ *
+ * A student who already has a Monthly_Billing row for the month in question
+ * is left out of the automatic figures entirely (see callers), so the two
+ * sources are additive rather than double-counting the same student.
+ */
+async function autoPaymentStatusByStudent() {
+  const { students, allocations, payments } = await repos.readMany({
+    students: ['students', (s) => s.status === 'active'],
+    allocations: ['allocations', (a) => a.status === 'active'],
+    payments: ['payments', (p) => p.status === 'active'],
+  });
+  const allocationByStudent = {};
+  for (const a of allocations) {
+    // A student can only have one active allocation at a time in practice;
+    // if data ever has more, keep the earliest start_date (their original
+    // join date) rather than an arbitrary one.
+    const existing = allocationByStudent[a.student_id];
+    if (!existing || a.start_date < existing.start_date) allocationByStudent[a.student_id] = a;
+  }
+  const paidByStudent = {};
+  for (const p of payments) {
+    paidByStudent[p.student_id] = (paidByStudent[p.student_id] || 0) + Number(p.amount);
+  }
+  const out = {};
+  for (const s of students) {
+    const allocation = allocationByStudent[s.student_id];
+    if (!allocation) continue;
+    const netMonthlyFee = finance.computePayable({ baseFee: allocation.monthly_fee, discount: allocation.discount || 0 });
+    const status = finance.autoPaymentStatus({
+      joinDate: allocation.start_date,
+      monthlyFee: netMonthlyFee,
+      totalPaid: paidByStudent[s.student_id] || 0,
+    });
+    out[s.student_id] = { student: s, status };
+  }
+  return out;
+}
+
 router.get(
   '/today',
   requireAuth,
@@ -59,12 +106,15 @@ router.get(
     // month the admin happens to be viewing (same all-months scan /payment-due
     // already does), otherwise it silently disappears the moment the calendar
     // rolls over to the next month.
-    const { billing, allUnpaidBilling, payments, expenses } = await repos.readMany({
-      billing: ['billing', (b) => b.billing_month === month],
-      allUnpaidBilling: ['billing', (b) => ['pending', 'partially_paid', 'overdue'].includes(b.status)],
-      payments: ['payments', (p) => p.status === 'active' && (p.payment_date || '').startsWith(month)],
-      expenses: ['expenses', (e) => (e.date || '').startsWith(month) && e.status !== 'void'],
-    });
+    const [{ billing, allUnpaidBilling, payments, expenses }, autoStatusByStudent] = await Promise.all([
+      repos.readMany({
+        billing: ['billing', (b) => b.billing_month === month],
+        allUnpaidBilling: ['billing', (b) => ['pending', 'partially_paid', 'overdue'].includes(b.status)],
+        payments: ['payments', (p) => p.status === 'active' && (p.payment_date || '').startsWith(month)],
+        expenses: ['expenses', (e) => (e.date || '').startsWith(month) && e.status !== 'void'],
+      }),
+      autoPaymentStatusByStudent(),
+    ]);
 
     const today = new Date().toISOString().slice(0, 10);
     const expected = finance.sumAmounts(billing.map((b) => Number(b.payable)));
@@ -73,15 +123,30 @@ router.get(
     // 'pending' past its due_date if nothing has re-run status maintenance.
     // Same due_date-vs-today rule as /payment-due, so the two endpoints agree.
     const isOverdue = (b) => b.due_date && b.due_date < today;
-    const pending = finance.sumAmounts(
+    const pendingFromBilling = finance.sumAmounts(
       billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && !isOverdue(b))
         .map((b) => Number(b.payable) - Number(b.paid))
     );
-    // Overdue is summed across ALL months' unpaid bills, not just this one —
-    // pending is still scoped to the selected month since "not yet due" only
-    // makes sense in the context of the month being reviewed.
-    const overdue = finance.sumAmounts(allUnpaidBilling.filter(isOverdue).map((b) => Number(b.payable) - Number(b.paid)));
+    // Overdue is summed across ALL months' unpaid Monthly_Billing rows, not
+    // just this one — an overdue bill from a prior month doesn't stop being
+    // owed just because the calendar rolled over.
+    const overdueFromBilling = finance.sumAmounts(allUnpaidBilling.filter(isOverdue).map((b) => Number(b.payable) - Number(b.paid)));
     const totalExpenses = finance.sumAmounts(expenses.map((e) => Number(e.amount)));
+
+    // Add the automatic (billing-record-free) status for every active
+    // student who has NO Monthly_Billing row at all this month — a student
+    // with a manual billing row uses that row's own figures above instead,
+    // so nobody is counted twice.
+    const studentIdsWithBillingThisMonth = new Set(billing.map((b) => b.student_id));
+    let pendingFromAuto = 0;
+    let overdueFromAuto = 0;
+    for (const [studentId, { status }] of Object.entries(autoStatusByStudent)) {
+      if (studentIdsWithBillingThisMonth.has(studentId) || status.balance <= 0) continue;
+      if (status.urgency === 'overdue') overdueFromAuto = finance.sumAmounts([overdueFromAuto, status.balance]);
+      else pendingFromAuto = finance.sumAmounts([pendingFromAuto, status.balance]);
+    }
+    const pending = finance.sumAmounts([pendingFromBilling, pendingFromAuto]);
+    const overdue = finance.sumAmounts([overdueFromBilling, overdueFromAuto]);
 
     res.json({
       month,
@@ -123,12 +188,15 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
-    const { billing, students } = await repos.readMany({
-      billing: ['billing', (b) => ['pending', 'partially_paid', 'overdue'].includes(b.status)],
-      students: 'students',
-    });
+    const [{ billing, students }, autoStatusByStudent] = await Promise.all([
+      repos.readMany({
+        billing: ['billing', (b) => ['pending', 'partially_paid', 'overdue'].includes(b.status)],
+        students: 'students',
+      }),
+      autoPaymentStatusByStudent(),
+    ]);
     const byId = Object.fromEntries(students.map((s) => [s.student_id, s]));
-    const due = billing.map((b) => ({
+    const fromBilling = billing.map((b) => ({
       billingId: b.billing_id,
       studentId: b.student_id,
       studentName: byId[b.student_id]?.full_name || 'Unknown',
@@ -136,7 +204,26 @@ router.get(
       billingMonth: b.billing_month,
       status: b.due_date && b.due_date < today ? 'overdue' : b.due_date === today ? 'due_today' : b.status,
     }));
-    res.json({ paymentDue: due });
+
+    // Students with no Monthly_Billing row at all still need to show up here
+    // if the automatic (billing-record-free) calculation says they owe
+    // something — otherwise this list, like /financial, silently misses
+    // most students since manual billing-record creation was removed.
+    const studentIdsWithBilling = new Set(billing.map((b) => b.student_id));
+    const fromAuto = [];
+    for (const [studentId, { student, status }] of Object.entries(autoStatusByStudent)) {
+      if (studentIdsWithBilling.has(studentId) || status.balance <= 0) continue;
+      fromAuto.push({
+        billingId: null,
+        studentId,
+        studentName: student.full_name || 'Unknown',
+        amountDue: status.balance,
+        billingMonth: null,
+        status: status.urgency === 'overdue' ? 'overdue' : status.urgency === 'due_today' ? 'due_today' : 'pending',
+      });
+    }
+
+    res.json({ paymentDue: [...fromBilling, ...fromAuto] });
   })
 );
 

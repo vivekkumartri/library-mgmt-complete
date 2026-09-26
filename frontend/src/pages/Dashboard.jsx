@@ -85,10 +85,12 @@ export default function Dashboard() {
       <div className="card" style={{ marginBottom: 24 }}>
         {paymentDue.length === 0 && <p style={{ color: 'var(--color-ink-soft)' }}>{t('common.noResults')}</p>}
         {paymentDue.map((p) => (
-          <div className="list-item" key={p.billingId}>
+          <div className="list-item" key={p.billingId || `auto-${p.studentId}`}>
             <div>
               <strong>{p.studentName}</strong>
-              <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>{formatMonth(p.billingMonth)}</div>
+              <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
+                {p.billingMonth ? formatMonth(p.billingMonth) : 'Auto-calculated, no billing record'}
+              </div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ textAlign: 'right' }}>
