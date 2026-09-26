@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import { MiniBarChart, MiniLineChart, DonutBreakdown } from '../components/charts/MiniCharts';
+import { formatMonth } from '../utils/formatDate';
 
 export default function Dashboard() {
   const { t } = useTranslation();
@@ -87,7 +88,7 @@ export default function Dashboard() {
           <div className="list-item" key={p.billingId}>
             <div>
               <strong>{p.studentName}</strong>
-              <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>{p.billingMonth}</div>
+              <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>{formatMonth(p.billingMonth)}</div>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ textAlign: 'right' }}>
@@ -109,7 +110,7 @@ export default function Dashboard() {
         ))}
       </div>
 
-      <h3>Financial — {month}</h3>
+      <h3>Financial — {formatMonth(month)}</h3>
       <div className="card-grid cols-3" style={{ marginBottom: 16 }}>
         <Stat label="Expected fees" value={`₹${financial.expectedFees}`} />
         <Stat label="Collected" value={`₹${financial.collected}`} />
@@ -121,10 +122,11 @@ export default function Dashboard() {
 
       <h3>Operational</h3>
       <div className="card-grid cols-3" style={{ marginBottom: 24 }}>
-        <Stat label="Active students" value={operational.activeStudents} />
+        {/* "Active students" and "Vacant/available seats" are already shown in
+            the Today tiles above (today.totalActiveStudents / today.availableSeats)
+            — not repeated here. */}
         <Stat label="New this month" value={studentsReport.counts.new} />
         <Stat label="Leaving this month" value={studentsReport.counts.leaving} />
-        <Stat label="Vacant seats" value={operational.vacantSeats} />
         <Stat label="Disabled seats" value={operational.disabledSeats} />
         <Stat label="Seat utilization" value={`${operational.seatUtilizationPercent}%`} />
       </div>

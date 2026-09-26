@@ -21,7 +21,8 @@ vi.mock('../context/AuthContext', () => ({
 import api from '../services/api';
 
 const floor = {
-  floor_id: 'floor-1', floor_name: 'Floor 1', floor_number: '1', rows: 5, columns: 10,
+  floor_id: 'floor-1', floor_name: 'Floor 1', floor_number: '1', rows: 1, columns: 10,
+  row_config_json: JSON.stringify([10]),
   opening_time: '06:00', closing_time: '22:00', status: 'active', notes: '',
 };
 
@@ -60,7 +61,7 @@ describe('Settings — editing a floor', () => {
 
   test('grows the grid via PATCH /floors/:id/resize', async () => {
     mockBaseGets();
-    api.patch.mockResolvedValueOnce({ data: { floor: { ...floor, rows: 6, columns: 10 }, seatsAdded: 10, seatsRemoved: 0 } });
+    api.patch.mockResolvedValueOnce({ data: { floor: { ...floor, row_config_json: JSON.stringify([12]) }, seatsAdded: 2, seatsRemoved: 0 } });
 
     render(<Settings />);
     await waitFor(() => expect(screen.getByText('Floor 1')).toBeInTheDocument());
@@ -68,14 +69,15 @@ describe('Settings — editing a floor', () => {
     fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => expect(screen.getByText('Edit floor')).toBeInTheDocument());
 
-    const rowsInput = screen.getByTestId('resize-rows');
-    fireEvent.change(rowsInput, { target: { value: '6' } });
+    // Row 1 starts at 10 seats (row_config_json above); grow it to 12.
+    const rowInput = screen.getByTestId('resize-row-0');
+    fireEvent.change(rowInput, { target: { value: '12' } });
     fireEvent.click(screen.getByText('Resize grid'));
 
     await waitFor(() =>
-      expect(api.patch).toHaveBeenCalledWith('/floors/floor-1/resize', { rows: 6, columns: 10 })
+      expect(api.patch).toHaveBeenCalledWith('/floors/floor-1/resize', { rowConfig: [12] })
     );
-    await waitFor(() => expect(screen.getByText('Added 10 seat(s).')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Added 2 seat(s).')).toBeInTheDocument());
   });
 
   test('shrinking asks for confirmation first', async () => {
@@ -88,7 +90,8 @@ describe('Settings — editing a floor', () => {
     fireEvent.click(screen.getByText('Edit'));
     await waitFor(() => expect(screen.getByText('Edit floor')).toBeInTheDocument());
 
-    fireEvent.change(screen.getByTestId('resize-columns'), { target: { value: '5' } });
+    // Row 1 starts at 10 seats; shrinking it to 5 should prompt for confirmation.
+    fireEvent.change(screen.getByTestId('resize-row-0'), { target: { value: '5' } });
     fireEvent.click(screen.getByText('Resize grid'));
 
     await waitFor(() => expect(window.confirm).toHaveBeenCalled());

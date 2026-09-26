@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import ChangePasswordCard from '../components/ChangePasswordCard';
+import { formatDate, formatMonth } from '../utils/formatDate';
 
 export function StudentHome() {
   const { t } = useTranslation();
@@ -45,9 +46,11 @@ export function StudentHome() {
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="stat-label">{t('studentPortal.currentSeat')}</div>
           <div className="stat-value">
-            {allocation.start_time} – {allocation.end_time}
+            {allocation.floor_name ? `${allocation.floor_name} · ` : ''}Seat {allocation.seat_number ?? allocation.seat_id}
           </div>
-          <p style={{ color: 'var(--color-ink-soft)', marginTop: 4 }}>₹{allocation.monthly_fee}/month</p>
+          <p style={{ color: 'var(--color-ink-soft)', marginTop: 4 }}>
+            {allocation.start_time} – {allocation.end_time} · ₹{allocation.monthly_fee}/month
+          </p>
         </div>
       ) : (
         <div className="card" style={{ marginBottom: 16, color: 'var(--color-ink-soft)' }}>{t('studentPortal.noAllocation')}</div>
@@ -111,10 +114,10 @@ export function StudentMySeat() {
           <div className="list-item" key={a.allocation_id}>
             <div>
               <strong>
-                {a.start_time} – {a.end_time}
+                {a.floor_name ? `${a.floor_name} · ` : ''}Seat {a.seat_number ?? a.seat_id} ({a.start_time} – {a.end_time})
               </strong>
               <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                {a.start_date} → {a.actual_end_date || 'ongoing'}
+                {formatDate(a.start_date)} → {a.actual_end_date ? formatDate(a.actual_end_date) : 'ongoing'}
               </div>
             </div>
             <span className={`badge ${a.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{a.status}</span>
@@ -128,7 +131,7 @@ export function StudentMySeat() {
         {vacations.map((v) => (
           <div className="list-item" key={v.vacation_id}>
             <span>
-              {v.start_date} → {v.end_date}
+              {formatDate(v.start_date)} → {formatDate(v.end_date)}
             </span>
             <span style={{ color: 'var(--color-ink-soft)' }}>{v.reason}</span>
           </div>
@@ -180,17 +183,40 @@ export function StudentFees() {
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
+  // Same due_date-vs-today rule the admin dashboard's payment-due widget
+  // uses: a bill can still say status 'pending' after its due_date has
+  // passed, so don't trust status alone to find what's actually overdue.
+  const today = new Date().toISOString().slice(0, 10);
+  const unpaid = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && b.due_date);
+  const nextDue = unpaid.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0] || null;
+  const nextDueUrgency = nextDue ? (nextDue.due_date < today ? 'overdue' : nextDue.due_date === today ? 'due_today' : 'upcoming') : null;
+
   return (
     <div>
       <h2>{t('studentPortal.fees')}</h2>
+
+      {nextDue && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <div className="stat-label">Upcoming due date</div>
+          <div className="stat-value">{formatDate(nextDue.due_date)}</div>
+          <p style={{ color: 'var(--color-ink-soft)', marginTop: 4 }}>
+            ₹{Math.max(0, Number(nextDue.payable) - Number(nextDue.paid))} due for {formatMonth(nextDue.billing_month)}
+            {' '}
+            <span className={`badge ${nextDueUrgency === 'overdue' ? 'badge-danger' : nextDueUrgency === 'due_today' ? 'badge-warning' : 'badge-neutral'}`}>
+              {nextDueUrgency === 'overdue' ? 'overdue' : nextDueUrgency === 'due_today' ? 'due today' : 'upcoming'}
+            </span>
+          </p>
+        </div>
+      )}
+
       <div className="card" style={{ marginBottom: 16 }}>
         {billing.length === 0 && <p style={{ color: 'var(--color-ink-soft)' }}>No billing records yet.</p>}
         {billing.map((b) => (
           <div className="list-item" key={b.billing_id}>
             <div>
-              <strong>{b.billing_month}</strong>
+              <strong>{formatMonth(b.billing_month)}</strong>
               <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                ₹{b.payable} payable · ₹{b.paid} paid
+                ₹{b.payable} payable · ₹{b.paid} paid{b.due_date ? ` · due ${formatDate(b.due_date)}` : ''}
               </div>
             </div>
             <span className={`badge ${b.status === 'paid' ? 'badge-success' : b.status === 'overdue' ? 'badge-danger' : 'badge-warning'}`}>
@@ -209,7 +235,7 @@ export function StudentFees() {
             <div>
               <strong>{p.receipt_number}</strong>
               <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                {p.payment_date} · ₹{p.amount} · {p.payment_method.toUpperCase()}
+                {formatDate(p.payment_date)} · ₹{p.amount} · {p.payment_method.toUpperCase()}
               </div>
             </div>
             <button className="btn btn-outline" disabled={receiptBusyId === p.payment_id} onClick={() => viewReceipt(p)}>
@@ -222,19 +248,37 @@ export function StudentFees() {
   );
 }
 
+const SELF_EDIT_FIELDS = [
+  ['fatherName', 'father_name', "Father's name"],
+  ['motherName', 'mother_name', "Mother's name"],
+  ['mobile', 'mobile', 'Mobile'],
+  ['alternateMobile', 'alternate_mobile', 'Alternate mobile'],
+  ['email', 'email', 'Email'],
+  ['address', 'address', 'Address'],
+  ['dateOfBirth', 'date_of_birth', 'Date of birth'],
+  ['idProofDetails', 'id_proof_details', 'ID proof details'],
+  ['emergencyContact', 'emergency_contact', 'Emergency contact'],
+];
+
 export function StudentProfileSelf() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const [student, setStudent] = useState(null);
+  const [editableFields, setEditableFields] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [editing, setEditing] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const res = await api.get(`/students/${user.id}`);
-      setStudent(res.data.student);
+      const [s, ef] = await Promise.all([
+        api.get(`/students/${user.id}`),
+        api.get('/students/self/editable-fields'),
+      ]);
+      setStudent(s.data.student);
+      setEditableFields(ef.data.fields);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -252,15 +296,43 @@ export function StudentProfileSelf() {
 
   return (
     <div>
-      <h2>{t('nav.profile')}</h2>
-      <div className="card">
-        <Row label="Student ID" value={student.student_id} />
-        <Row label="Name" value={student.full_name} />
-        <Row label="Mobile" value={student.mobile} />
-        <Row label="Email" value={student.email} />
-        <Row label="Joining date" value={student.joining_date} />
-        <Row label="Status" value={student.status} />
+      <div className="topbar">
+        <h2 style={{ margin: 0 }}>{t('nav.profile')}</h2>
+        {!editing && editableFields.length > 0 && (
+          <button className="btn btn-outline" onClick={() => setEditing(true)}>
+            Edit details
+          </button>
+        )}
       </div>
+
+      {editing ? (
+        <StudentProfileEditForm
+          student={student}
+          editableFields={editableFields}
+          onCancel={() => setEditing(false)}
+          onDone={(updated) => {
+            setStudent(updated);
+            setEditing(false);
+          }}
+        />
+      ) : (
+        <div className="card">
+          <Row label="Student ID" value={student.student_id} />
+          <Row label="Name" value={student.full_name} />
+          <Row label="Father's name" value={student.father_name} />
+          <Row label="Mother's name" value={student.mother_name} />
+          <Row label="Mobile" value={student.mobile} />
+          <Row label="Alternate mobile" value={student.alternate_mobile} />
+          <Row label="Email" value={student.email} />
+          <Row label="Address" value={student.address} />
+          <Row label="Date of birth" value={formatDate(student.date_of_birth)} />
+          <Row label="ID proof details" value={student.id_proof_details} />
+          <Row label="Emergency contact" value={student.emergency_contact} />
+          <Row label="Joining date" value={formatDate(student.joining_date)} />
+          <Row label="Status" value={student.status} />
+        </div>
+      )}
+
       <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 12 }}>
         {t('studentPortal.contactStaff')}
       </p>
@@ -268,6 +340,61 @@ export function StudentProfileSelf() {
         <ChangePasswordCard />
       </div>
     </div>
+  );
+}
+
+function StudentProfileEditForm({ student, editableFields, onCancel, onDone }) {
+  // Only the fields the admin has turned on in Settings appear here at all —
+  // the backend re-checks this too (student_self_edit_fields), this is just
+  // to not show a field the student can't actually save.
+  const fields = SELF_EDIT_FIELDS.filter(([bodyKey]) => editableFields.includes(bodyKey));
+  const [form, setForm] = useState(() =>
+    Object.fromEntries(fields.map(([bodyKey, column]) => [bodyKey, student[column] || '']))
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  function setField(key, value) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  async function submit(e) {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    try {
+      const res = await api.patch(`/students/${student.student_id}/self`, form);
+      onDone(res.data.student);
+    } catch (err) {
+      setError(apiErrorMessage(err, 'Unable to save your details.'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form className="card" onSubmit={submit}>
+      {error && <p style={{ color: 'var(--color-danger)', fontSize: 13, marginTop: 0 }}>{error}</p>}
+      {fields.map(([bodyKey, , label]) => (
+        <div className="field" key={bodyKey}>
+          <label>{label}</label>
+          <input
+            className="input"
+            type={bodyKey === 'dateOfBirth' ? 'date' : 'text'}
+            value={form[bodyKey]}
+            onChange={(e) => setField(bodyKey, e.target.value)}
+          />
+        </div>
+      ))}
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <button type="button" className="btn btn-outline" onClick={onCancel} disabled={saving}>
+          Cancel
+        </button>
+        <button type="submit" className="btn btn-primary" disabled={saving}>
+          {saving ? 'Saving…' : 'Save changes'}
+        </button>
+      </div>
+    </form>
   );
 }
 
@@ -347,7 +474,7 @@ export function StudentLibraryInfo() {
         {specialHolidays.length === 0 && <p style={{ color: 'var(--color-ink-soft)' }}>None announced.</p>}
         {specialHolidays.map((h, i) => (
           <div className="list-item" key={`${h.date}-${i}`}>
-            <span>{h.date}</span>
+            <span>{formatDate(h.date)}</span>
             <span style={{ color: 'var(--color-ink-soft)' }}>{h.description || 'Holiday'}</span>
           </div>
         ))}

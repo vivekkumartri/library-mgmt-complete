@@ -12,11 +12,12 @@ router.get(
   requireAdmin,
   asyncHandler(async (req, res) => {
     const today = new Date().toISOString().slice(0, 10);
-    // One batched Sheets API call for all five tabs instead of five separate
+    // One batched Sheets API call for all six tabs instead of six separate
     // reads — this endpoint is hit on every dashboard load.
-    const { students, seats, attendanceToday, payments, expenses } = await repos.readMany({
+    const { students, seats, allocations, attendanceToday, payments, expenses } = await repos.readMany({
       students: 'students',
       seats: 'seats',
+      allocations: ['allocations', (a) => a.status === 'active' || a.status === 'scheduled'],
       attendanceToday: ['attendance', (a) => a.date === today],
       payments: ['payments', (p) => p.payment_date === today && p.status === 'active'],
       expenses: ['expenses', (e) => e.date === today && e.status !== 'void'],
@@ -25,7 +26,12 @@ router.get(
     const activeStudents = students.filter((s) => s.status === 'active');
     const totalSeats = seats.length;
     const disabledSeats = seats.filter((s) => s.status === 'disabled').length;
-    const availableSeats = seats.filter((s) => s.status === 'available').length;
+    // A seat's own `status` column is only ever 'available' or 'disabled' —
+    // it is never flipped when an allocation is created/ended. So "available"
+    // has to mean: not disabled, and not currently held by an active/scheduled
+    // allocation (checked against Seat_Allocations, the source of truth).
+    const allocatedSeatIds = new Set(allocations.map((a) => a.seat_id));
+    const availableSeats = seats.filter((s) => s.status !== 'disabled' && !allocatedSeatIds.has(s.seat_id)).length;
 
     res.json({
       date: today,
@@ -54,12 +60,16 @@ router.get(
       expenses: ['expenses', (e) => (e.date || '').startsWith(month) && e.status !== 'void'],
     });
 
+    const today = new Date().toISOString().slice(0, 10);
     const expected = finance.sumAmounts(billing.map((b) => Number(b.payable)));
     const collected = finance.sumAmounts(payments.map((p) => Number(p.amount)));
-    const pending = finance.sumAmounts(
-      billing.filter((b) => b.status === 'pending' || b.status === 'partially_paid').map((b) => Number(b.payable) - Number(b.paid))
-    );
-    const overdue = finance.sumAmounts(billing.filter((b) => b.status === 'overdue').map((b) => Number(b.payable) - Number(b.paid)));
+    // Don't trust the stored `status` column alone — a bill can sit at
+    // 'pending' past its due_date if nothing has re-run status maintenance.
+    // Same due_date-vs-today rule as /payment-due, so the two endpoints agree.
+    const unpaidBills = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status));
+    const isOverdue = (b) => b.due_date && b.due_date < today;
+    const pending = finance.sumAmounts(unpaidBills.filter((b) => !isOverdue(b)).map((b) => Number(b.payable) - Number(b.paid)));
+    const overdue = finance.sumAmounts(unpaidBills.filter(isOverdue).map((b) => Number(b.payable) - Number(b.paid)));
     const totalExpenses = finance.sumAmounts(expenses.map((e) => Number(e.amount)));
 
     res.json({
@@ -86,8 +96,11 @@ router.get(
     });
     const activeStudents = students.filter((s) => s.status === 'active').length;
     const pastStudents = students.filter((s) => s.status === 'past').length;
-    const vacantSeats = seats.filter((s) => s.status === 'available').length;
     const disabledSeats = seats.filter((s) => s.status === 'disabled').length;
+    // Same fix as /today: derive vacancy from allocations, not the seat's own
+    // (never-updated) status column.
+    const allocatedSeatIds = new Set(allocations.map((a) => a.seat_id));
+    const vacantSeats = seats.filter((s) => s.status !== 'disabled' && !allocatedSeatIds.has(s.seat_id)).length;
     const utilization = seats.length > 0 ? Math.round((allocations.length / seats.length) * 100) : 0;
     res.json({ activeStudents, pastStudents, vacantSeats, disabledSeats, totalSeats: seats.length, seatUtilizationPercent: utilization });
   })

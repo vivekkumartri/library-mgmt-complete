@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import { exportCsv, exportXlsx } from '../utils/exportTable';
+import { formatDate } from '../utils/formatDate';
 
 const TABS = [
   ['financial', 'Financial'],
@@ -229,7 +230,7 @@ function StudentTable({ title, rows }) {
         {rows.map((s) => (
           <div className="list-item" key={s.studentId}>
             <span>{s.fullName} ({s.studentId})</span>
-            <span style={{ color: 'var(--color-ink-soft)' }}>{s.joiningDate} {s.leavingDate ? `→ ${s.leavingDate}` : ''}</span>
+            <span style={{ color: 'var(--color-ink-soft)' }}>{formatDate(s.joiningDate)} {s.leavingDate ? `→ ${formatDate(s.leavingDate)}` : ''}</span>
           </div>
         ))}
       </div>
@@ -291,7 +292,7 @@ function PaymentsTab({ report, month }) {
         {report.dateWise.length === 0 && <p style={{ color: 'var(--color-ink-soft)', margin: 0 }}>No payments this month.</p>}
         {report.dateWise.map((d) => (
           <div className="list-item" key={d.date}>
-            <span>{d.date}</span>
+            <span>{formatDate(d.date)}</span>
             <span>₹{d.amount}</span>
           </div>
         ))}
@@ -317,7 +318,7 @@ function AttendanceTab({ report, month }) {
         {report.dateWise.length === 0 && <p style={{ color: 'var(--color-ink-soft)', margin: 0 }}>No attendance recorded this month.</p>}
         {report.dateWise.map((d) => (
           <div className="list-item" key={d.date}>
-            <span>{d.date}</span>
+            <span>{formatDate(d.date)}</span>
             <span style={{ color: 'var(--color-ink-soft)' }}>{d.present || 0} present · {d.absent || 0} absent</span>
           </div>
         ))}
@@ -349,7 +350,7 @@ function ExpensesTab({ expenses, month, onAdd, onEdit, onVoid }) {
             <div>
               <strong>{e.category}</strong>
               <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                {e.date} · {e.description}
+                {formatDate(e.date)} · {e.description}
                 {e.status === 'void' ? ` · VOID (${e.void_reason})` : ''}
               </div>
             </div>

@@ -233,9 +233,14 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
       const status = res.data;
       setAutoStatus(status);
       if (status.paid > 0 && status.paidThroughDate) {
-        const nextDay = new Date(`${status.paidThroughDate}T00:00:00`);
-        nextDay.setDate(nextDay.getDate() + 1);
-        setPeriodStart(nextDay.toISOString().slice(0, 10));
+        // Plain date-string arithmetic, not a Date object round-trip — parsing
+        // 'YYYY-MM-DDT00:00:00' as local time and then reading back
+        // .toISOString() (UTC) shifts the result by the timezone offset in
+        // any zone ahead of UTC (e.g. IST), silently landing back on the
+        // same day instead of the next one.
+        const [y, m, d] = status.paidThroughDate.split('-').map(Number);
+        const nextDayUtc = new Date(Date.UTC(y, m - 1, d + 1));
+        setPeriodStart(nextDayUtc.toISOString().slice(0, 10));
         setStatusNotice(`Currently paid through ${status.paidThroughDate}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
       } else if (status.joinDate) {
         setPeriodStart(status.joinDate);

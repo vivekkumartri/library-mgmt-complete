@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
+import { formatDate } from '../utils/formatDate';
 
 const CATEGORIES = ['rent', 'utilities', 'salaries', 'maintenance', 'supplies', 'marketing', 'other'];
 
@@ -84,7 +85,7 @@ export default function Expenses() {
               <div>
                 <strong>{e.category}</strong>
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                  {e.date} · {e.description || 'No description'}
+                  {formatDate(e.date)} · {e.description || 'No description'}
                   {e.payment_mode ? ` · ${e.payment_mode.toUpperCase()}` : ''}
                 </div>
               </div>

@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import Dashboard from '../pages/Dashboard';
+import { formatMonth } from '../utils/formatDate';
 import '../i18n';
 
 vi.mock('../services/api', () => {
@@ -39,7 +40,7 @@ describe('Dashboard', () => {
       </MemoryRouter>
     );
 
-    await waitFor(() => expect(screen.getByText('Financial — ' + new Date().toISOString().slice(0, 7))).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Financial — ' + formatMonth(new Date().toISOString().slice(0, 7)))).toBeInTheDocument());
     expect(screen.getAllByText('₹900').length).toBeGreaterThan(0); // collected
     expect(screen.getByText('Fee collection vs outstanding')).toBeInTheDocument();
     expect(screen.getByText('Floor-wise occupancy')).toBeInTheDocument();

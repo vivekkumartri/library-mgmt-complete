@@ -42,6 +42,19 @@ router.get(
     if (studentId) allocations = allocations.filter((a) => a.student_id === studentId);
     if (seatId) allocations = allocations.filter((a) => a.seat_id === seatId);
     if (status) allocations = allocations.filter((a) => a.status === status);
+
+    // Enrich with seat number / floor name so callers (student portal, admin
+    // student profile) can display "Floor 1 · Seat 12" without a second
+    // round-trip to /seats and /floors themselves.
+    const [seats, floors] = await Promise.all([repos.seats.findAll(), repos.floors.findAll()]);
+    const seatsById = Object.fromEntries(seats.map((s) => [s.seat_id, s]));
+    const floorsById = Object.fromEntries(floors.map((f) => [f.floor_id, f]));
+    allocations = allocations.map((a) => ({
+      ...a,
+      seat_number: seatsById[a.seat_id]?.seat_number ?? null,
+      floor_name: floorsById[a.floor_id]?.floor_name ?? null,
+    }));
+
     res.json({ allocations });
   })
 );

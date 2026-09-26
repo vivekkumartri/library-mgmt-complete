@@ -2,6 +2,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Settings from '../pages/Settings';
+import { formatDate } from '../utils/formatDate';
 import '../i18n';
 
 vi.mock('../services/api', () => {
@@ -50,9 +51,9 @@ describe('Settings — Backups & restore panel', () => {
 
     await waitFor(() => expect(screen.getAllByText('Restore…').length).toBe(2));
 
-    const dates = screen.getAllByText(/2026-08-2[56]/).map((el) => el.textContent);
-    expect(dates[0]).toBe('2026-08-26');
-    expect(dates[1]).toBe('2026-08-25');
+    const dates = screen.getAllByText(new RegExp(`${formatDate('2026-08-25')}|${formatDate('2026-08-26')}`)).map((el) => el.textContent);
+    expect(dates[0]).toBe(formatDate('2026-08-26'));
+    expect(dates[1]).toBe(formatDate('2026-08-25'));
   });
 
   test('restoring requires the explicit acknowledgement checkbox before it is enabled', async () => {

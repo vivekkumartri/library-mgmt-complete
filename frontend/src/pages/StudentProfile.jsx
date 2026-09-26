@@ -5,6 +5,7 @@ import { Loading, ErrorState } from '../components/AsyncState';
 import SignaturePad from '../components/SignaturePad';
 import CameraCapture from '../components/CameraCapture';
 import EndAllocationDrawer from '../components/EndAllocationDrawer';
+import { formatDate, formatMonth } from '../utils/formatDate';
 
 const URGENCY_LABEL = {
   overdue: 'Payment overdue',
@@ -258,7 +259,7 @@ export default function StudentProfile() {
           <Row label="Alternate mobile" value={student.alternate_mobile} />
           <Row label="Email" value={student.email} />
           <Row label="Date of birth" value={student.date_of_birth} />
-          <Row label="Joining date" value={student.joining_date} />
+          <Row label="Joining date" value={formatDate(student.joining_date)} />
           <Row label="Address" value={student.address} />
           <Row label="ID proof" value={student.id_proof_details} />
           <Row label="Emergency contact" value={student.emergency_contact} />
@@ -345,10 +346,10 @@ export default function StudentProfile() {
             <div className="list-item" key={a.allocation_id}>
               <div>
                 <strong>
-                  {a.start_time} – {a.end_time}
+                  {a.floor_name ? `${a.floor_name} · ` : ''}Seat {a.seat_number ?? a.seat_id} ({a.start_time} – {a.end_time})
                 </strong>
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                  {a.start_date} → {a.actual_end_date || 'ongoing'}
+                  {formatDate(a.start_date)} → {a.actual_end_date ? formatDate(a.actual_end_date) : 'ongoing'}
                 </div>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -430,7 +431,7 @@ export default function StudentProfile() {
           {billing.map((b) => (
             <div className="list-item" key={b.billing_id}>
               <div>
-                <strong>{b.billing_month}</strong>
+                <strong>{formatMonth(b.billing_month)}</strong>
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
                   ₹{b.payable} payable · ₹{b.paid} paid
                 </div>
@@ -448,7 +449,7 @@ export default function StudentProfile() {
           {attendance.slice(0, 10).map((a) => (
             <div className="list-item" key={a.attendance_id}>
               <div>
-                <span>{a.date}</span>
+                <span>{formatDate(a.date)}</span>
                 {a.marked_at && (
                   <div style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>
                     Marked at {new Date(a.marked_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -500,7 +501,7 @@ export default function StudentProfile() {
               <div>
                 <strong>{p.receipt_number}</strong>
                 <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
-                  {p.payment_date} · ₹{p.amount} · {p.payment_method.toUpperCase()}
+                  {formatDate(p.payment_date)} · ₹{p.amount} · {p.payment_method.toUpperCase()}
                   {p.status === 'void' ? ' · VOID' : ''}
                 </div>
               </div>
@@ -563,7 +564,7 @@ function EditAllocationDateDrawer({ allocation, onClose, onDone }) {
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
         <h3>Edit allocation start date</h3>
         <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
-          Seat {allocation.start_time} – {allocation.end_time}, currently starting {allocation.start_date}.
+          {allocation.floor_name ? `${allocation.floor_name} · ` : ''}Seat {allocation.seat_number ?? allocation.seat_id} ({allocation.start_time} – {allocation.end_time}), currently starting {formatDate(allocation.start_date)}.
         </p>
         <div className="field">
           <label>New start date</label>

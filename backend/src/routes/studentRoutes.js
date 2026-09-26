@@ -135,6 +135,98 @@ router.patch(
   })
 );
 
+// ---- Student self-service: limited profile edit (own record only) ----
+// Deliberately excludes full_name, joining_date, notes and status — identity
+// and admin-facing fields stay admin-only via PATCH /:id above. A student
+// can keep their own contact/personal details current without waiting on
+// staff for a routine correction.
+const selfUpdateSchema = z.object({
+  mobile: z.string().min(6).optional(),
+  alternateMobile: z.string().optional(),
+  email: z.string().email().optional().or(z.literal('')),
+  address: z.string().optional(),
+  dateOfBirth: z.string().optional(),
+  idProofDetails: z.string().optional(),
+  emergencyContact: z.string().optional(),
+  fatherName: z.string().optional(),
+  motherName: z.string().optional(),
+});
+
+const SELF_FIELD_MAP = {
+  mobile: 'mobile',
+  alternateMobile: 'alternate_mobile',
+  email: 'email',
+  address: 'address',
+  dateOfBirth: 'date_of_birth',
+  idProofDetails: 'id_proof_details',
+  emergencyContact: 'emergency_contact',
+  fatherName: 'father_name',
+  motherName: 'mother_name',
+};
+
+const ALL_SELF_FIELD_KEYS = Object.keys(SELF_FIELD_MAP);
+
+/**
+ * Which of SELF_FIELD_MAP's keys admins have allowed students to edit
+ * themselves, from Settings.student_self_edit_fields (a JSON array set on
+ * the admin Settings page). Unset/missing/unparseable defaults to "all" so
+ * this stays backward-compatible for anyone who hasn't visited that Settings
+ * section yet.
+ */
+async function getSelfEditableFields() {
+  const setting = await repos.settings.findById('student_self_edit_fields');
+  if (!setting || !setting.value) return ALL_SELF_FIELD_KEYS;
+  try {
+    const parsed = JSON.parse(setting.value);
+    if (!Array.isArray(parsed)) return ALL_SELF_FIELD_KEYS;
+    return parsed.filter((k) => ALL_SELF_FIELD_KEYS.includes(k));
+  } catch {
+    return ALL_SELF_FIELD_KEYS;
+  }
+}
+
+router.patch(
+  '/:id/self',
+  requireAuth,
+  requireStudent,
+  asyncHandler(async (req, res) => {
+    if (req.user.id !== req.params.id) {
+      throw new AppError('FORBIDDEN', 'You can only edit your own profile.', 403);
+    }
+    const data = selfUpdateSchema.parse(req.body);
+    const editableFields = await getSelfEditableFields();
+    const patch = {};
+    for (const [bodyKey, column] of Object.entries(SELF_FIELD_MAP)) {
+      if (data[bodyKey] === undefined) continue;
+      if (!editableFields.includes(bodyKey)) {
+        throw new AppError('FORBIDDEN', 'Editing this field has been disabled by the library admin.', 403);
+      }
+      patch[column] = data[bodyKey];
+    }
+    if (Object.keys(patch).length === 0) {
+      throw new AppError('VALIDATION_ERROR', 'No editable fields provided.', 400);
+    }
+    patch.updated_at = new Date().toISOString();
+    const before = await repos.students.findById(req.params.id);
+    if (!before) throw new AppError('NOT_FOUND', 'Student not found.', 404);
+    const updated = await repos.students.update(req.params.id, patch);
+    await auditService.log({ actor: req.user, action: 'student_self_edited', entity: 'Students', entityId: req.params.id, previousValue: before, newValue: updated });
+    res.json({ student: stripSensitive(updated) });
+  })
+);
+
+// Lets the student portal ask "which fields am I allowed to edit" without
+// duplicating SELF_FIELD_MAP client-side or needing admin permissions to
+// read the raw settings blob.
+router.get(
+  '/self/editable-fields',
+  requireAuth,
+  requireStudent,
+  asyncHandler(async (req, res) => {
+    res.json({ fields: await getSelfEditableFields() });
+  })
+);
+
 router.post(
   '/:id/deactivate',
   requireAuth,

@@ -4,9 +4,27 @@ import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import { useAuth } from '../context/AuthContext';
 import ChangePasswordCard from '../components/ChangePasswordCard';
+import { formatDate } from '../utils/formatDate';
 
 const WEEKDAYS = [
   ['0', 'Sun'], ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'],
+];
+
+// Keys must match backend SELF_FIELD_MAP in studentRoutes.js — this is the
+// full set of fields a student's own portal could ever let them edit; which
+// of these are actually turned on lives in the student_self_edit_fields
+// setting below. full_name, joining_date, notes and status are intentionally
+// never in this list — those stay admin-only regardless of this setting.
+const STUDENT_SELF_EDIT_FIELDS = [
+  ['fatherName', "Father's name"],
+  ['motherName', "Mother's name"],
+  ['mobile', 'Mobile'],
+  ['alternateMobile', 'Alternate mobile'],
+  ['email', 'Email'],
+  ['address', 'Address'],
+  ['dateOfBirth', 'Date of birth'],
+  ['idProofDetails', 'ID proof details'],
+  ['emergencyContact', 'Emergency contact'],
 ];
 
 /** Settings stores structured config as JSON strings under a single key; these helpers keep parsing in one place. */
@@ -52,6 +70,11 @@ export default function Settings() {
   // effect immediately with no redeploy.
   const [attendanceRetentionDays, setAttendanceRetentionDays] = useState('365');
 
+  // Which profile fields students may edit themselves on their portal — off
+  // by default for a field only if the admin explicitly unchecks it; unset
+  // in Settings means "all", matching the backend's fail-open default.
+  const [selfEditFields, setSelfEditFields] = useState(STUDENT_SELF_EDIT_FIELDS.map(([key]) => key));
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -67,6 +90,7 @@ export default function Settings() {
       setWeeklyHolidays(parseJsonSetting(s.data.settings.weekly_holidays, []));
       setSpecialHolidays(parseJsonSetting(s.data.settings.special_holidays, []));
       setAttendanceRetentionDays(String(s.data.settings.attendance_retention_days || '365'));
+      setSelfEditFields(parseJsonSetting(s.data.settings.student_self_edit_fields, STUDENT_SELF_EDIT_FIELDS.map(([key]) => key)));
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -110,6 +134,10 @@ export default function Settings() {
     setSpecialHolidays((list) => list.filter((_, i) => i !== index));
   }
 
+  function toggleSelfEditField(key) {
+    setSelfEditFields((fields) => (fields.includes(key) ? fields.filter((f) => f !== key) : [...fields, key]));
+  }
+
   async function saveSettings() {
     setSaving(true);
     try {
@@ -124,6 +152,7 @@ export default function Settings() {
         weekly_holidays: JSON.stringify(weeklyHolidays),
         special_holidays: JSON.stringify(specialHolidays),
         attendance_retention_days: attendanceRetentionDays,
+        student_self_edit_fields: JSON.stringify(selfEditFields),
       };
       delete payload.default_late_fee; // superseded by default_late_fee_config
       await api.put('/settings', payload);
@@ -275,7 +304,7 @@ export default function Settings() {
           {specialHolidays.map((h, i) => (
             <div className="list-item" key={`${h.date}-${i}`}>
               <span>
-                {h.date} — {h.description || 'Holiday'}
+                {formatDate(h.date)} — {h.description || 'Holiday'}
               </span>
               <button className="btn btn-outline" onClick={() => removeSpecialHoliday(i)}>
                 Remove
@@ -297,6 +326,29 @@ export default function Settings() {
           </button>
         </div>
         <button className="btn btn-primary" disabled={saving} onClick={saveSettings} style={{ marginTop: 12 }}>
+          {saving ? 'Saving…' : t('settingsPage.saveSettings')}
+        </button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3>Student self-editable profile fields</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          Choose which of their own profile fields students can edit from their portal, without asking
+          staff. Name, joining date, notes and status are always admin-only, no matter what's checked here.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
+          {STUDENT_SELF_EDIT_FIELDS.map(([key, label]) => (
+            <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+              <input
+                type="checkbox"
+                checked={selfEditFields.includes(key)}
+                onChange={() => toggleSelfEditField(key)}
+              />
+              {label}
+            </label>
+          ))}
+        </div>
+        <button className="btn btn-primary" disabled={saving} onClick={saveSettings}>
           {saving ? 'Saving…' : t('settingsPage.saveSettings')}
         </button>
       </div>
@@ -480,7 +532,7 @@ function BackupsPanel() {
               .map((b) => (
                 <div className="list-item" key={`${b.date}/${b.time}`}>
                   <div>
-                    <strong>{b.date}</strong>
+                    <strong>{formatDate(b.date)}</strong>
                     <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>{b.time}</div>
                   </div>
                   <button className="btn btn-danger-outline" onClick={() => setConfirming(b)}>
@@ -574,7 +626,7 @@ function RestoreConfirmDrawer({ backup, onClose, onDone }) {
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        <h3>Restore backup — {backup.date} {backup.time}</h3>
+        <h3>Restore backup — {formatDate(backup.date)} {backup.time}</h3>
 
         {!done && (
           <>
@@ -732,6 +784,7 @@ function RowConfigEditor({ rowConfig, onChange }) {
             type="number"
             min="1"
             value={count}
+            data-testid={`resize-row-${i}`}
             onChange={(e) => setRowColumns(i, e.target.value)}
             style={{ flex: 1 }}
           />

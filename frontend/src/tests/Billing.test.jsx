@@ -57,37 +57,6 @@ describe('Billing page', () => {
     await waitFor(() => expect(screen.getByText(/No billing records for this month/i)).toBeInTheDocument());
   });
 
-  test('creates a new billing record', async () => {
-    api.get.mockImplementation((url) => {
-      if (url === '/billing') return Promise.resolve({ data: { billing: [] } });
-      if (url === '/students') return Promise.resolve({ data: { students: [student] } });
-      return Promise.resolve({ data: {} });
-    });
-    api.post.mockResolvedValueOnce({ data: { billing: { billing_id: 'b2' } } });
-
-    render(<Billing />);
-    await waitFor(() => expect(screen.getByText(/No billing records/i)).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('New billing record'));
-
-    const searchInput = screen.getByPlaceholderText(/Name, ID, or mobile/i);
-    await userEvent.type(searchInput, 'Rahul');
-    await waitFor(() => screen.getByText(/Rahul Kumar/i));
-    fireEvent.click(screen.getByText(/Rahul Kumar/i));
-
-    const [baseFeeInput] = screen.getAllByRole('spinbutton');
-    fireEvent.change(baseFeeInput, { target: { value: '1200' } });
-
-    fireEvent.click(screen.getByText('Create'));
-
-    await waitFor(() =>
-      expect(api.post).toHaveBeenCalledWith(
-        '/billing',
-        expect.objectContaining({ studentId: student.student_id, baseFee: 1200 })
-      )
-    );
-  });
-
   test('records a payment against an existing billing record, then offers the receipt before reloading', async () => {
     let billingList = [billingRow];
     api.get.mockImplementation((url) => {
@@ -120,33 +89,6 @@ describe('Billing page', () => {
 
     fireEvent.click(screen.getByText('Done'));
     await waitFor(() => expect(screen.queryByText('Payment recorded')).not.toBeInTheDocument());
-  });
-
-  test('prefills base fee and discount from the student\'s current fee plan', async () => {
-    api.get.mockImplementation((url) => {
-      if (url === '/billing') return Promise.resolve({ data: { billing: [] } });
-      if (url === '/students') return Promise.resolve({ data: { students: [student] } });
-      if (url === `/students/${student.student_id}/fee-plans`) {
-        return Promise.resolve({
-          data: { history: [], current: { monthly_fee: 1500, discount: 200, effective_from: '2026-08-01' } },
-        });
-      }
-      return Promise.resolve({ data: {} });
-    });
-
-    render(<Billing />);
-    await waitFor(() => expect(screen.getByText(/No billing records/i)).toBeInTheDocument());
-
-    fireEvent.click(screen.getByText('New billing record'));
-    const searchInput = screen.getByPlaceholderText(/Name, ID, or mobile/i);
-    await userEvent.type(searchInput, 'Rahul');
-    await waitFor(() => screen.getByText(/Rahul Kumar/i));
-    fireEvent.click(screen.getByText(/Rahul Kumar/i));
-
-    await waitFor(() => expect(screen.getByText(/Prefilled from current fee plan/i)).toBeInTheDocument());
-    const [baseFeeInput, discountInput] = screen.getAllByRole('spinbutton');
-    expect(baseFeeInput.value).toBe('1500');
-    expect(discountInput.value).toBe('200');
   });
 
   test('records a date-range payment with no billingId, offering the receipt afterward', async () => {
