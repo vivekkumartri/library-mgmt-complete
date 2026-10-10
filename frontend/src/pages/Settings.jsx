@@ -75,6 +75,10 @@ export default function Settings() {
   // in Settings means "all", matching the backend's fail-open default.
   const [selfEditFields, setSelfEditFields] = useState(STUDENT_SELF_EDIT_FIELDS.map(([key]) => key));
 
+  // Default mode for "Record payment (date range)" — 'auto' fills To date
+  // from amount ÷ monthly fee automatically; 'manual' leaves it blank.
+  const [paymentDateMode, setPaymentDateMode] = useState('auto');
+
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
@@ -91,6 +95,7 @@ export default function Settings() {
       setSpecialHolidays(parseJsonSetting(s.data.settings.special_holidays, []));
       setAttendanceRetentionDays(String(s.data.settings.attendance_retention_days || '365'));
       setSelfEditFields(parseJsonSetting(s.data.settings.student_self_edit_fields, STUDENT_SELF_EDIT_FIELDS.map(([key]) => key)));
+      setPaymentDateMode(s.data.settings.payment_date_mode || 'auto');
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -153,6 +158,7 @@ export default function Settings() {
         special_holidays: JSON.stringify(specialHolidays),
         attendance_retention_days: attendanceRetentionDays,
         student_self_edit_fields: JSON.stringify(selfEditFields),
+        payment_date_mode: paymentDateMode,
       };
       delete payload.default_late_fee; // superseded by default_late_fee_config
       await api.put('/settings', payload);
@@ -326,6 +332,40 @@ export default function Settings() {
           </button>
         </div>
         <button className="btn btn-primary" disabled={saving} onClick={saveSettings} style={{ marginTop: 12 }}>
+          {saving ? 'Saving…' : t('settingsPage.saveSettings')}
+        </button>
+      </div>
+
+      <div className="card" style={{ marginBottom: 24 }}>
+        <h3>Payment recording preference</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          Controls the default behaviour of "To date" in the Record payment (date range) form.
+          Auto fills the end date from the amount entered and the student's monthly fee.
+          Manual leaves it blank so you enter it yourself.
+        </p>
+        <div style={{ display: 'flex', gap: 16, marginBottom: 12 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+            <input
+              type="radio"
+              name="paymentDateMode"
+              value="auto"
+              checked={paymentDateMode === 'auto'}
+              onChange={() => setPaymentDateMode('auto')}
+            />
+            Auto calculation (recommended)
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 14 }}>
+            <input
+              type="radio"
+              name="paymentDateMode"
+              value="manual"
+              checked={paymentDateMode === 'manual'}
+              onChange={() => setPaymentDateMode('manual')}
+            />
+            Manual entry
+          </label>
+        </div>
+        <button className="btn btn-primary" disabled={saving} onClick={saveSettings}>
           {saving ? 'Saving…' : t('settingsPage.saveSettings')}
         </button>
       </div>

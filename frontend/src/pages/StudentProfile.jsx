@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
@@ -6,6 +6,56 @@ import SignaturePad from '../components/SignaturePad';
 import CameraCapture from '../components/CameraCapture';
 import EndAllocationDrawer from '../components/EndAllocationDrawer';
 import { formatDate, formatMonth } from '../utils/formatDate';
+
+function useBlobUrl(fetchFn, deps) {
+  const [url, setUrl] = useState(null);
+  const prevUrl = useRef(null);
+  useEffect(() => {
+    let active = true;
+    fetchFn().then((blob) => {
+      if (!active) return;
+      if (prevUrl.current) URL.revokeObjectURL(prevUrl.current);
+      const objUrl = URL.createObjectURL(blob);
+      prevUrl.current = objUrl;
+      setUrl(objUrl);
+    }).catch(() => setUrl(null));
+    return () => {
+      active = false;
+      if (prevUrl.current) { URL.revokeObjectURL(prevUrl.current); prevUrl.current = null; }
+      setUrl(null);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return url;
+}
+
+function StudentPhotoDisplay({ studentId, hasPhoto, hasSignature }) {
+  const photoUrl = useBlobUrl(
+    () => api.get(`/students/${studentId}/photo`, { responseType: 'blob' }).then((r) => r.data),
+    [studentId, hasPhoto]
+  );
+  const sigUrl = useBlobUrl(
+    () => api.get(`/students/${studentId}/signature`, { responseType: 'blob' }).then((r) => r.data),
+    [studentId, hasSignature]
+  );
+  if (!photoUrl && !sigUrl) return null;
+  return (
+    <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start', marginBottom: 16, flexWrap: 'wrap' }}>
+      {photoUrl && (
+        <div style={{ textAlign: 'center' }}>
+          <img src={photoUrl} alt="Student photo" style={{ width: 96, height: 96, borderRadius: 8, objectFit: 'cover', border: '2px solid var(--color-border)', display: 'block' }} />
+          <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 4 }}>Photo</div>
+        </div>
+      )}
+      {sigUrl && (
+        <div style={{ textAlign: 'center' }}>
+          <img src={sigUrl} alt="Signature" style={{ width: 160, height: 64, objectFit: 'contain', border: '2px solid var(--color-border)', borderRadius: 8, background: '#fff', display: 'block' }} />
+          <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 4 }}>Signature</div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 const URGENCY_LABEL = {
   overdue: 'Payment overdue',
@@ -264,6 +314,11 @@ export default function StudentProfile() {
           <Row label="ID proof" value={student.id_proof_details} />
           <Row label="Emergency contact" value={student.emergency_contact} />
           <Row label="Notes" value={student.notes} />
+          <StudentPhotoDisplay
+            studentId={student.student_id}
+            hasPhoto={!!student.photo_drive_file_id}
+            hasSignature={!!student.signature_drive_file_id}
+          />
           <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={() => setShowCamera((v) => !v)}>
               {student.photo_drive_file_id ? 'Retake photo' : 'Capture photo'}

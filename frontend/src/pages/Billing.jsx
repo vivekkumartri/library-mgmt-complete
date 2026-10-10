@@ -52,6 +52,13 @@ export default function Billing() {
   const [error, setError] = useState('');
   const [payFor, setPayFor] = useState(null);
   const [showRangePayment, setShowRangePayment] = useState(false);
+  const [paymentDateMode, setPaymentDateMode] = useState('auto');
+
+  useEffect(() => {
+    api.get('/settings').then((res) => {
+      setPaymentDateMode(res.data.settings?.payment_date_mode || 'auto');
+    }).catch(() => {});
+  }, []);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,7 +125,7 @@ export default function Billing() {
 
       {payFor && <RecordPaymentDrawer billing={payFor} onClose={() => setPayFor(null)} onDone={() => { setPayFor(null); load(); }} />}
       {showRangePayment && (
-        <RecordRangePaymentDrawer onClose={() => setShowRangePayment(false)} onDone={() => { setShowRangePayment(false); load(); }} />
+        <RecordRangePaymentDrawer defaultDateMode={paymentDateMode} onClose={() => setShowRangePayment(false)} onDone={() => { setShowRangePayment(false); load(); }} />
       )}
     </div>
   );
@@ -202,7 +209,7 @@ function RecordPaymentDrawer({ billing, onClose, onDone }) {
  * empty billing_id plus period_start/period_end, so it never affects
  * Monthly_Billing totals, status, or month-based reports.
  */
-function RecordRangePaymentDrawer({ onClose, onDone }) {
+function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' }) {
   const [student, setStudent] = useState(null);
   const [periodStart, setPeriodStart] = useState('');
   const [periodEnd, setPeriodEnd] = useState('');
@@ -215,17 +222,15 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
   const [recorded, setRecorded] = useState(null);
   const [autoStatus, setAutoStatus] = useState(null);
   const [statusNotice, setStatusNotice] = useState('');
+  const [dateMode, setDateMode] = useState(defaultDateMode);
 
-  // Prefill "From date" automatically once a student is picked — a
-  // student's payment period always starts from where their coverage
-  // actually left off: the day after whatever they're already paid
-  // through, or their seat-joining date if this is their first payment
-  // ever. No need to look anything up in Monthly_Billing for this.
   useEffect(() => {
     if (!student) {
       setAutoStatus(null);
       setStatusNotice('');
       setPeriodStart('');
+      setPeriodEnd('');
+      setAmount('');
       return;
     }
     let cancelled = false;
@@ -233,25 +238,49 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
       if (cancelled) return;
       const status = res.data;
       setAutoStatus(status);
+      // Use studentJoiningDate (student record) for From date prefill, not
+      // allocation start_date — they can differ if the seat was allocated
+      // retroactively to the 1st of the month.
+      const prefillStart = status.studentJoiningDate || status.joinDate;
       if (status.paid > 0 && status.paidThroughDate) {
-        // Plain date-string arithmetic, not a Date object round-trip — parsing
-        // 'YYYY-MM-DDT00:00:00' as local time and then reading back
-        // .toISOString() (UTC) shifts the result by the timezone offset in
-        // any zone ahead of UTC (e.g. IST), silently landing back on the
-        // same day instead of the next one.
+        // Plain date-string arithmetic — avoid Date round-trip which shifts
+        // result by IST offset when reading back via .toISOString() (UTC).
         const [y, m, d] = status.paidThroughDate.split('-').map(Number);
         const nextDayUtc = new Date(Date.UTC(y, m - 1, d + 1));
         setPeriodStart(nextDayUtc.toISOString().slice(0, 10));
         setStatusNotice(`Currently paid through ${formatDate(status.paidThroughDate)}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
-      } else if (status.joinDate) {
-        setPeriodStart(status.joinDate);
-        setStatusNotice(`No payments on file yet — prefilled from their joining date (${formatDate(status.joinDate)}).`);
+      } else if (prefillStart) {
+        setPeriodStart(prefillStart);
+        setStatusNotice(`No payments on file yet — prefilled from their joining date (${formatDate(prefillStart)}).`);
       } else {
         setStatusNotice('No active seat allocation on file — enter the period manually.');
       }
     }).catch(() => setStatusNotice(''));
     return () => { cancelled = true; };
   }, [student]);
+
+  function calcEndDate(start, amt, fee) {
+    if (!start || !amt || !fee) return '';
+    const coveredDays = Math.floor((Number(amt) / Number(fee)) * 30);
+    if (!coveredDays) return '';
+    const [y, m, d] = start.split('-').map(Number);
+    const endUtc = new Date(Date.UTC(y, m - 1, d + coveredDays - 1));
+    return endUtc.toISOString().slice(0, 10);
+  }
+
+  function handleAmountChange(val) {
+    setAmount(val);
+    if (dateMode === 'auto') {
+      setPeriodEnd(calcEndDate(periodStart, val, autoStatus?.monthlyFee));
+    }
+  }
+
+  function handlePeriodStartChange(val) {
+    setPeriodStart(val);
+    if (dateMode === 'auto') {
+      setPeriodEnd(calcEndDate(val, amount, autoStatus?.monthlyFee));
+    }
+  }
 
   async function submit() {
     if (!student || !periodStart || !periodEnd || !amount) {
@@ -306,14 +335,47 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
               </div>
             )}
             {statusNotice && <p style={{ fontSize: 12, color: 'var(--color-ink-soft)' }}>{statusNotice}</p>}
+            {autoStatus?.monthlyFee && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8, fontSize: 13 }}>
+                <span style={{ color: 'var(--color-ink-soft)' }}>To date:</span>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <input
+                    type="radio"
+                    name="dateMode"
+                    checked={dateMode === 'auto'}
+                    onChange={() => {
+                      setDateMode('auto');
+                      setPeriodEnd(calcEndDate(periodStart, amount, autoStatus.monthlyFee));
+                    }}
+                  />
+                  Auto (from amount ÷ fee)
+                </label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                  <input
+                    type="radio"
+                    name="dateMode"
+                    checked={dateMode === 'manual'}
+                    onChange={() => setDateMode('manual')}
+                  />
+                  Manual
+                </label>
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 12 }}>
               <div className="field" style={{ flex: 1 }}>
                 <label>From date</label>
-                <input className="input" type="date" value={periodStart} onChange={(e) => setPeriodStart(e.target.value)} />
+                <input className="input" type="date" value={periodStart} onChange={(e) => handlePeriodStartChange(e.target.value)} />
               </div>
               <div className="field" style={{ flex: 1 }}>
                 <label>To date</label>
-                <input className="input" type="date" value={periodEnd} onChange={(e) => setPeriodEnd(e.target.value)} />
+                <input
+                  className="input"
+                  type="date"
+                  value={periodEnd}
+                  onChange={(e) => setPeriodEnd(e.target.value)}
+                  readOnly={dateMode === 'auto'}
+                  style={dateMode === 'auto' ? { background: 'var(--color-surface-subtle, #f5f5f5)', cursor: 'default' } : undefined}
+                />
               </div>
             </div>
             <div className="field">
@@ -322,9 +384,14 @@ function RecordRangePaymentDrawer({ onClose, onDone }) {
                 className="input"
                 type="number"
                 value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+                onChange={(e) => handleAmountChange(e.target.value)}
                 placeholder={autoStatus?.monthlyFee ? String(autoStatus.monthlyFee) : undefined}
               />
+              {autoStatus?.monthlyFee && dateMode === 'auto' && (
+                <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 4 }}>
+                  To date fills automatically: ₹{autoStatus.monthlyFee}/mo · 30 days per month.
+                </div>
+              )}
             </div>
             <div className="field">
               <label>Method</label>

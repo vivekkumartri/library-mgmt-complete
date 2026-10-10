@@ -44,18 +44,18 @@ export function StudentHome() {
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  // Prefer an actual Monthly_Billing record when one exists — same
-  // due_date-vs-today rule as everywhere else — since an admin-entered bill
-  // can carry a discount/override the automatic calculation doesn't know
-  // about. Most students have no billing record at all (manual billing
-  // creation isn't part of the admin UI anymore), so fall back to the
-  // automatic per-allocation status (the same one the seat map uses) —
-  // without this fallback, most students would never see a due date here.
   const today = new Date().toISOString().slice(0, 10);
+  const useAutoMode = autoStatus?.paymentDateMode !== 'manual';
   const unpaidBills = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && b.due_date);
   const nextBill = unpaidBills.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0] || null;
-  const dueDate = nextBill ? nextBill.due_date : autoStatus?.dueDate || null;
-  const amountDue = nextBill ? Math.max(0, Number(nextBill.payable) - Number(nextBill.paid)) : autoStatus?.amountDue || 0;
+  // In auto mode: always use the calculated due date (join date + payments).
+  // In manual mode: prefer an explicit Monthly_Billing due date, fall back to auto.
+  const dueDate = useAutoMode
+    ? (autoStatus?.dueDate || null)
+    : (nextBill ? nextBill.due_date : autoStatus?.dueDate || null);
+  const amountDue = useAutoMode
+    ? (autoStatus?.amountDue || 0)
+    : (nextBill ? Math.max(0, Number(nextBill.payable) - Number(nextBill.paid)) : autoStatus?.amountDue || 0);
   const urgency = dueDate ? (dueDate < today ? 'overdue' : dueDate === today ? 'due_today' : 'upcoming') : null;
 
   return (
@@ -181,8 +181,10 @@ export function StudentMySeat() {
 
 export function StudentFees() {
   const { t } = useTranslation();
+  const { user } = useAuth();
   const [billing, setBilling] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [autoStatus, setAutoStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [receiptError, setReceiptError] = useState('');
@@ -204,15 +206,20 @@ export function StudentFees() {
     setLoading(true);
     setError('');
     try {
-      const [b, p] = await Promise.all([api.get('/billing'), api.get('/payments')]);
+      const [b, p, s] = await Promise.all([
+        api.get('/billing'),
+        api.get('/payments'),
+        user?.id ? api.get(`/students/${user.id}/payment-status`).catch(() => ({ data: null })) : Promise.resolve({ data: null }),
+      ]);
       setBilling(b.data.billing);
       setPayments(p.data.payments);
+      setAutoStatus(s.data);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     load();
@@ -221,24 +228,28 @@ export function StudentFees() {
   if (loading) return <Loading />;
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  // Same due_date-vs-today rule the admin dashboard's payment-due widget
-  // uses: a bill can still say status 'pending' after its due_date has
-  // passed, so don't trust status alone to find what's actually overdue.
   const today = new Date().toISOString().slice(0, 10);
+  const useAutoMode = autoStatus?.paymentDateMode !== 'manual';
   const unpaid = billing.filter((b) => ['pending', 'partially_paid', 'overdue'].includes(b.status) && b.due_date);
   const nextDue = unpaid.slice().sort((a, b) => a.due_date.localeCompare(b.due_date))[0] || null;
-  const nextDueUrgency = nextDue ? (nextDue.due_date < today ? 'overdue' : nextDue.due_date === today ? 'due_today' : 'upcoming') : null;
+  // In auto mode: show calculated due date; in manual mode: show billing record due date.
+  const displayDueDate = useAutoMode ? (autoStatus?.dueDate || null) : (nextDue?.due_date || autoStatus?.dueDate || null);
+  const displayAmountDue = useAutoMode
+    ? (autoStatus?.amountDue || 0)
+    : (nextDue ? Math.max(0, Number(nextDue.payable) - Number(nextDue.paid)) : autoStatus?.amountDue || 0);
+  const nextDueUrgency = displayDueDate ? (displayDueDate < today ? 'overdue' : displayDueDate === today ? 'due_today' : 'upcoming') : null;
 
   return (
     <div>
       <h2>{t('studentPortal.fees')}</h2>
 
-      {nextDue && (
+      {displayDueDate && (
         <div className="card" style={{ marginBottom: 16 }}>
           <div className="stat-label">Upcoming due date</div>
-          <div className="stat-value">{formatDate(nextDue.due_date)}</div>
+          <div className="stat-value">{formatDate(displayDueDate)}</div>
           <p style={{ color: 'var(--color-ink-soft)', marginTop: 4 }}>
-            ₹{Math.max(0, Number(nextDue.payable) - Number(nextDue.paid))} due for {formatMonth(nextDue.billing_month)}
+            ₹{displayAmountDue} due
+            {!useAutoMode && nextDue?.billing_month ? ` for ${formatMonth(nextDue.billing_month)}` : ''}
             {' '}
             <span className={`badge ${nextDueUrgency === 'overdue' ? 'badge-danger' : nextDueUrgency === 'due_today' ? 'badge-warning' : 'badge-neutral'}`}>
               {nextDueUrgency === 'overdue' ? 'overdue' : nextDueUrgency === 'due_today' ? 'due today' : 'upcoming'}

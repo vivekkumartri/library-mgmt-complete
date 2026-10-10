@@ -217,14 +217,16 @@ class AllocationService {
    * hasn't had a chance to pay yet, reads as 'ok', not overdue.
    */
   async paymentStatusForStudent(studentId, allocation) {
-    const [resolvedAllocation, payments] = await Promise.all([
+    const [resolvedAllocation, payments, student] = await Promise.all([
       allocation ? Promise.resolve(allocation) : this._studentActiveAllocations(studentId).then((rows) => rows[0] || null),
       repos.payments.findAll((p) => p.student_id === studentId && p.status === 'active'),
+      repos.students.findById(studentId),
     ]);
     const totalPaid = financeService.sumAmounts(payments.map((p) => Number(p.amount)));
     const lastPaymentDate = payments.reduce((latest, p) => (p.payment_date && p.payment_date > (latest || '') ? p.payment_date : latest), null);
+    const studentJoiningDate = student?.joining_date || null;
     if (!resolvedAllocation) {
-      return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, monthlyFee: null, paid: totalPaid, owed: 0, lastPaymentDate };
+      return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, studentJoiningDate, monthlyFee: null, paid: totalPaid, owed: 0, lastPaymentDate };
     }
     const netMonthlyFee = financeService.computePayable({
       baseFee: resolvedAllocation.monthly_fee,
@@ -240,6 +242,7 @@ class AllocationService {
       dueDate: status.paidThroughDate,
       amountDue: status.balance,
       joinDate: resolvedAllocation.start_date,
+      studentJoiningDate,
       monthlyFee: Number(resolvedAllocation.monthly_fee),
       paid: status.paid,
       owed: status.owed,
@@ -275,6 +278,8 @@ class AllocationService {
           paymentDueDate: payment.dueDate,
           paymentAmountDue: payment.amountDue,
           lastPaymentDate: payment.lastPaymentDate,
+          hasPhoto: !!student?.photo_drive_file_id,
+          hasSignature: !!student?.signature_drive_file_id,
         };
       })
     );

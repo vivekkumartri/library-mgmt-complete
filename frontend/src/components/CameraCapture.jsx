@@ -22,6 +22,7 @@ export default function CameraCapture({ onCapture, label = 'Photo' }) {
   const [capturedBlob, setCapturedBlob] = useState(null);
   const [error, setError] = useState('');
   const [useFallback, setUseFallback] = useState(false);
+  const [facingMode, setFacingMode] = useState('user'); // user = front, environment = back
 
   const stopStream = useCallback(() => {
     if (streamRef.current) {
@@ -32,14 +33,14 @@ export default function CameraCapture({ onCapture, label = 'Photo' }) {
 
   useEffect(() => stopStream, [stopStream]);
 
-  async function openCamera() {
+  async function openCamera(facing = facingMode) {
     setError('');
     if (!navigator.mediaDevices?.getUserMedia) {
       setUseFallback(true);
       return;
     }
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: facing } });
       streamRef.current = stream;
       setMode('live');
       // Video element isn't mounted until mode flips — attach on next tick.
@@ -70,6 +71,13 @@ export default function CameraCapture({ onCapture, label = 'Photo' }) {
       stopStream();
       setMode('preview');
     }, 'image/jpeg', 0.9);
+  }
+
+  async function switchCamera() {
+    const next = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(next);
+    stopStream();
+    await openCamera(next);
   }
 
   function retake() {
@@ -105,7 +113,7 @@ export default function CameraCapture({ onCapture, label = 'Photo' }) {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="user"
+          capture="environment"
           style={{ display: 'none' }}
           onChange={onFileChosen}
         />
@@ -134,9 +142,12 @@ export default function CameraCapture({ onCapture, label = 'Photo' }) {
           style={{ width: '100%', maxHeight: 320, borderRadius: 'var(--radius-md)', background: '#000' }}
         />
         <canvas ref={canvasRef} style={{ display: 'none' }} />
-        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
           <button type="button" className="btn btn-primary" onClick={capture}>
             Capture
+          </button>
+          <button type="button" className="btn btn-outline" onClick={switchCamera}>
+            {facingMode === 'user' ? '🔄 Back camera' : '🔄 Front camera'}
           </button>
           <button type="button" className="btn btn-outline" onClick={cancel}>
             Cancel

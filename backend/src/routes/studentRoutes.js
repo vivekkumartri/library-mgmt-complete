@@ -372,6 +372,40 @@ router.post(
   })
 );
 
+router.get(
+  '/:id/photo',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.user.type === 'student' && req.user.id !== req.params.id) {
+      throw new AppError('FORBIDDEN', 'You can only view your own photo.', 403);
+    }
+    const student = await repos.students.findById(req.params.id);
+    if (!student) throw new AppError('NOT_FOUND', 'Student not found.', 404);
+    if (!student.photo_drive_file_id) throw new AppError('NOT_FOUND', 'No photo on file.', 404);
+    const buffer = await driveService.getFileBuffer(student.photo_drive_file_id);
+    res.set('Content-Type', 'image/jpeg');
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  })
+);
+
+router.get(
+  '/:id/signature',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    if (req.user.type === 'student' && req.user.id !== req.params.id) {
+      throw new AppError('FORBIDDEN', 'You can only view your own signature.', 403);
+    }
+    const student = await repos.students.findById(req.params.id);
+    if (!student) throw new AppError('NOT_FOUND', 'Student not found.', 404);
+    if (!student.signature_drive_file_id) throw new AppError('NOT_FOUND', 'No signature on file.', 404);
+    const buffer = await driveService.getFileBuffer(student.signature_drive_file_id);
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'private, max-age=3600');
+    res.send(buffer);
+  })
+);
+
 // ---- Vacations ----
 router.get(
   '/:id/vacations',
@@ -447,8 +481,11 @@ router.get(
     if (req.user.type === 'student' && req.user.id !== req.params.id) {
       throw new AppError('FORBIDDEN', 'You can only view your own payment status.', 403);
     }
-    const status = await AllocationService.paymentStatusForStudent(req.params.id);
-    res.json(status);
+    const [status, modeSetting] = await Promise.all([
+      AllocationService.paymentStatusForStudent(req.params.id),
+      repos.settings.findById('payment_date_mode'),
+    ]);
+    res.json({ ...status, paymentDateMode: modeSetting?.value || 'auto' });
   })
 );
 

@@ -1,10 +1,32 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import AllocateForm from './AllocateForm';
 import EndAllocationDrawer from './EndAllocationDrawer';
 import { formatDate } from '../utils/formatDate';
+
+function StudentPhoto({ studentId }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => {
+    let objUrl;
+    api.get(`/students/${studentId}/photo`, { responseType: 'blob' })
+      .then((res) => {
+        objUrl = URL.createObjectURL(res.data);
+        setUrl(objUrl);
+      })
+      .catch(() => {});
+    return () => { if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [studentId]);
+  if (!url) return null;
+  return (
+    <img
+      src={url}
+      alt="Student photo"
+      style={{ width: 56, height: 56, borderRadius: '50%', objectFit: 'cover', flexShrink: 0, border: '2px solid var(--color-border)' }}
+    />
+  );
+}
 
 const URGENCY_LABEL = {
   overdue: 'Payment overdue',
@@ -105,7 +127,9 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
             {(!seat.timeline || seat.timeline.length === 0) && <p style={{ color: 'var(--color-ink-soft)' }}>No active allocations.</p>}
             {(seat.timeline || []).map((a) => (
               <div className="list-item" key={a.allocationId} style={{ alignItems: 'flex-start' }}>
-                <div>
+                <div style={{ display: 'flex', gap: 10, flex: 1 }}>
+                  {a.hasPhoto && <StudentPhoto studentId={a.studentId} />}
+                  <div>
                   <strong>{a.studentName || a.studentId}</strong>
                   <div style={{ fontSize: 13, color: 'var(--color-ink-soft)' }}>
                     {a.studentId}
@@ -129,6 +153,7 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
                       ) : null}
                     </div>
                   )}
+                  </div>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
                   <div style={{ display: 'flex', gap: 6 }}>
