@@ -406,7 +406,7 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
               />
               {autoStatus?.monthlyFee && dateMode === 'auto' && (
                 <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 4 }}>
-                  To date fills automatically: ₹{autoStatus.monthlyFee}/mo · 30 days per month.
+                  To date fills automatically: ₹{autoStatus.monthlyFee}/mo · real calendar months.
                 </div>
               )}
             </div>
