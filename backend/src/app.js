@@ -36,10 +36,6 @@ app.get('/api/health', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 
-// Multer is applied only on the two upload routes; every other student
-// route runs without it.
-app.post('/api/students/:id/photo', upload.single('photo'));
-app.post('/api/students/:id/signature', upload.single('signature'));
 app.use('/api/students', studentRoutes);
 
 app.post('/api/settings/logo', upload.single('logo'));

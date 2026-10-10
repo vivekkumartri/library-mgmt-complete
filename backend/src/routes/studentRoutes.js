@@ -1,4 +1,5 @@
 const express = require('express');
+const multer = require('multer');
 const { z } = require('zod');
 const repos = require('../repositories');
 const asyncHandler = require('../utils/asyncHandler');
@@ -11,6 +12,7 @@ const feePlanService = require('../services/feePlanService');
 const { AllocationService } = require('../services/allocationService');
 
 const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 const createStudentSchema = z.object({
   fullName: z.string().min(1),
@@ -330,12 +332,13 @@ router.post(
   })
 );
 
-// ---- Photo / signature upload (multipart handled by route-level middleware in server.js) ----
+// ---- Photo / signature upload ----
 router.post(
   '/:id/photo',
   requireAuth,
   requireAdmin,
   requirePermission('students'),
+  upload.single('photo'),
   asyncHandler(async (req, res) => {
     if (!req.file) throw new AppError('NO_FILE', 'No photo file was uploaded.', 400);
     const student = await repos.students.findById(req.params.id);
@@ -354,6 +357,7 @@ router.post(
 router.post(
   '/:id/signature',
   requireAuth,
+  upload.single('signature'),
   asyncHandler(async (req, res) => {
     if (req.user.type === 'student' && req.user.id !== req.params.id) {
       throw new AppError('FORBIDDEN', 'You can only manage your own signature.', 403);
