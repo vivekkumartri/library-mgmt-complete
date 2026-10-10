@@ -266,11 +266,25 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
 
   function calcEndDate(start, amt, fee) {
     if (!start || !amt || !fee) return '';
-    const coveredDays = Math.floor((Number(amt) / Number(fee)) * 30);
-    if (!coveredDays) return '';
-    const [y, m, d] = start.split('-').map(Number);
-    const endUtc = new Date(Date.UTC(y, m - 1, d + coveredDays - 1));
-    return endUtc.toISOString().slice(0, 10);
+    const feeN = Number(fee);
+    let remaining = Number(amt);
+    if (!feeN || !remaining) return '';
+    // Advance real calendar months, same logic as backend autoPaymentStatus.
+    const [sy, sm, sd] = start.split('-').map(Number);
+    let cursor = new Date(Date.UTC(sy, sm - 1, sd));
+    while (remaining >= feeN) {
+      remaining -= feeN;
+      const ny = cursor.getUTCFullYear(), nm = cursor.getUTCMonth();
+      const lastDay = new Date(Date.UTC(ny, nm + 2, 0)).getUTCDate();
+      cursor = new Date(Date.UTC(ny, nm + 1, Math.min(cursor.getUTCDate(), lastDay)));
+    }
+    // Partial month — prorate by actual days in this calendar month.
+    const ny = cursor.getUTCFullYear(), nm = cursor.getUTCMonth();
+    const nextMonth = new Date(Date.UTC(ny, nm + 1, Math.min(cursor.getUTCDate(), new Date(Date.UTC(ny, nm + 2, 0)).getUTCDate())));
+    const daysInMonth = Math.round((nextMonth - cursor) / 86400000);
+    const extraDays = Math.floor((remaining / feeN) * daysInMonth);
+    const end = new Date(cursor.getTime() + extraDays * 86400000);
+    return end.toISOString().slice(0, 10);
   }
 
   function handleAmountChange(val) {

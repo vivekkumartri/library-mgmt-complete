@@ -86,18 +86,23 @@ function sumAmounts(amounts) {
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 /**
- * Automatic, billing-record-free due calculation. Instead of requiring an
- * admin to create a Monthly_Billing row every month before the seat map (or
- * anything else) can tell whether a student is paid up, this works it out
- * directly from three things every allocated student already has: the date
- * they joined this seat (allocation start_date), their monthly fee, and the
- * total they've paid so far (summed across every active Payments row for
- * that student — both billing-linked and free-standing date-range
- * payments). One month of coverage = 30 days from the join date, which is a
- * simplification but keeps the math predictable and paise-exact; it is not
- * meant to replace Monthly_Billing for admins who still want itemized
- * monthly records, only to give a good default "are they due?" answer when
- * nobody has created one.
+ * Advance a UTC date by exactly one calendar month (same day-of-month,
+ * clamped to the last day if the target month is shorter — e.g. Jan 31
+ * + 1 month = Feb 28/29).
+ */
+function addOneMonth(d) {
+  const y = d.getUTCFullYear();
+  const m = d.getUTCMonth(); // 0-based
+  const day = d.getUTCDate();
+  const lastDayOfNext = new Date(Date.UTC(y, m + 2, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m + 1, Math.min(day, lastDayOfNext)));
+}
+
+/**
+ * Automatic, billing-record-free due calculation. Advances month by month
+ * from the join date using real calendar months (31-day months cost the
+ * same ₹fee as 28-day months), with the final partial month prorated by
+ * the actual number of days in that month.
  */
 function autoPaymentStatus({ joinDate, monthlyFee, totalPaid = 0, today = new Date() }) {
   const fee = Number(monthlyFee) || 0;
@@ -108,25 +113,46 @@ function autoPaymentStatus({ joinDate, monthlyFee, totalPaid = 0, today = new Da
   const join = dateOnlyUTC(new Date(`${joinDate}T00:00:00Z`));
   const startOfToday = dateOnlyUTC(today);
 
-  // How many days of coverage the amount paid so far buys, laid out from
-  // the join date — this is the date the student is "paid through", and
-  // the single source of truth for urgency (day-precise, so "due today"
-  // means coverage runs out today, not "some month rounded up").
-  const coveredDays = (paid / fee) * 30;
-  const paidThrough = new Date(join.getTime() + coveredDays * MS_PER_DAY);
-  const daysUntilDue = Math.round((paidThrough - startOfToday) / MS_PER_DAY);
+  // Walk forward month by month from join date, consuming `fee` paise per
+  // full month, until the remaining balance runs out. The last partial month
+  // is prorated by the actual number of days in that calendar month.
+  let remaining = toPaise(paid);
+  let cursor = join;
+  while (remaining >= toPaise(fee)) {
+    remaining -= toPaise(fee);
+    cursor = addOneMonth(cursor);
+  }
+  // cursor is now the start of the month the student is partially into.
+  // remaining paise buys a fraction of this calendar month.
+  const nextMonth = addOneMonth(cursor);
+  const daysInMonth = Math.round((nextMonth - cursor) / MS_PER_DAY);
+  const extraDays = Math.floor((remaining / toPaise(fee)) * daysInMonth);
+  const paidThrough = new Date(cursor.getTime() + extraDays * MS_PER_DAY);
 
+  const daysUntilDue = Math.round((paidThrough - startOfToday) / MS_PER_DAY);
   let urgency = 'ok';
   if (daysUntilDue < 0) urgency = 'overdue';
   else if (daysUntilDue === 0) urgency = 'due_today';
   else if (daysUntilDue <= 7) urgency = 'due_soon';
 
-  // Amount currently owed: the fee prorated over however many days have
-  // actually elapsed since joining, minus what's been paid — floors at 0
-  // rather than going negative once someone has paid ahead.
-  const elapsedDays = Math.max(0, Math.round((startOfToday - join) / MS_PER_DAY));
-  const owed = toRupees((elapsedDays / 30) * toPaise(fee));
-  const balance = Math.max(0, toRupees(toPaise(owed) - toPaise(paid)));
+  // Amount currently owed: walk forward from join to today counting real
+  // calendar months, then prorate the current partial month.
+  let owedPaise = 0;
+  let owedCursor = join;
+  while (true) {
+    const owedNext = addOneMonth(owedCursor);
+    if (owedNext <= startOfToday) {
+      owedPaise += toPaise(fee);
+      owedCursor = owedNext;
+    } else {
+      const daysInThisMonth = Math.round((owedNext - owedCursor) / MS_PER_DAY);
+      const daysElapsed = Math.round((startOfToday - owedCursor) / MS_PER_DAY);
+      owedPaise += Math.round((daysElapsed / daysInThisMonth) * toPaise(fee));
+      break;
+    }
+  }
+  const owed = toRupees(owedPaise);
+  const balance = Math.max(0, toRupees(owedPaise - toPaise(paid)));
 
   return { urgency, paidThroughDate: paidThrough.toISOString().slice(0, 10), owed, paid, balance };
 }
