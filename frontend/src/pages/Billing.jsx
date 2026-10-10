@@ -242,18 +242,16 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
       // allocation start_date — they can differ if the seat was allocated
       // retroactively to the 1st of the month.
       const prefillStart = status.studentJoiningDate || status.joinDate;
-      if (status.paid > 0 && status.paidThroughDate) {
-        // Plain date-string arithmetic — avoid Date round-trip which shifts
-        // result by IST offset when reading back via .toISOString() (UTC).
-        const [y, m, d] = status.paidThroughDate.split('-').map(Number);
+      if (status.paid > 0 && status.dueDate) {
+        const [y, m, d] = status.dueDate.split('-').map(Number);
         const nextDayUtc = new Date(Date.UTC(y, m - 1, d + 1));
         setPeriodStart(nextDayUtc.toISOString().slice(0, 10));
-        setStatusNotice(`Currently paid through ${formatDate(status.paidThroughDate)}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
+        setStatusNotice(`Currently paid through ${formatDate(status.dueDate)}${status.amountDue > 0 ? ` · ₹${status.amountDue} due` : ''}.`);
       } else if (prefillStart) {
         setPeriodStart(prefillStart);
         const msg = status.paid > 0
-          ? `₹${status.paid} paid but no coverage period calculated — check monthly fee on allocation. Prefilled from joining date (${formatDate(prefillStart)}).`
-          : `No payments on file yet — prefilled from their joining date (${formatDate(prefillStart)}).`;
+          ? `₹${status.paid} paid · no due date yet — check monthly fee on allocation. Prefilled from joining date (${formatDate(prefillStart)}).`
+          : `No payments on file yet — prefilled from joining date (${formatDate(prefillStart)}).`;
         setStatusNotice(msg);
       } else {
         setStatusNotice('No active seat allocation on file — enter the period manually.');
