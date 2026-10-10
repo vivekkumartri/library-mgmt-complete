@@ -382,6 +382,7 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
               <div className="field" style={{ flex: 1 }}>
                 <label>From date</label>
                 <input className="input" type="date" value={periodStart} onChange={(e) => handlePeriodStartChange(e.target.value)} />
+                {periodStart && <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 3 }}>{formatDate(periodStart)}</div>}
               </div>
               <div className="field" style={{ flex: 1 }}>
                 <label>To date</label>
@@ -393,6 +394,7 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
                   readOnly={dateMode === 'auto'}
                   style={dateMode === 'auto' ? { background: 'var(--color-surface-subtle, #f5f5f5)', cursor: 'default' } : undefined}
                 />
+                {periodEnd && <div style={{ fontSize: 11, color: 'var(--color-ink-soft)', marginTop: 3 }}>{formatDate(periodEnd)}</div>}
               </div>
             </div>
             <div className="field">
