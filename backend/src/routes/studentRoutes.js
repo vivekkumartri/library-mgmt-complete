@@ -485,6 +485,7 @@ router.get(
       AllocationService.paymentStatusForStudent(req.params.id),
       repos.settings.findById('payment_date_mode'),
     ]);
+    res.set('Cache-Control', 'no-store');
     res.json({ ...status, paymentDateMode: modeSetting?.value || 'auto' });
   })
 );
