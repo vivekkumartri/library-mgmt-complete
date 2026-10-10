@@ -251,11 +251,16 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
         setStatusNotice(`Currently paid through ${formatDate(status.paidThroughDate)}${status.balance > 0 ? ` · ₹${status.balance} due` : ''}.`);
       } else if (prefillStart) {
         setPeriodStart(prefillStart);
-        setStatusNotice(`No payments on file yet — prefilled from their joining date (${formatDate(prefillStart)}).`);
+        const msg = status.paid > 0
+          ? `₹${status.paid} paid but no coverage period calculated — check monthly fee on allocation. Prefilled from joining date (${formatDate(prefillStart)}).`
+          : `No payments on file yet — prefilled from their joining date (${formatDate(prefillStart)}).`;
+        setStatusNotice(msg);
       } else {
         setStatusNotice('No active seat allocation on file — enter the period manually.');
       }
-    }).catch(() => setStatusNotice(''));
+    }).catch((err) => {
+      if (!cancelled) setStatusNotice(`Could not load payment status: ${err?.response?.data?.error?.message || err?.message || 'unknown error'}`);
+    });
     return () => { cancelled = true; };
   }, [student]);
 
