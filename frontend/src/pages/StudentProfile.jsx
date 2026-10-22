@@ -216,15 +216,15 @@ export default function StudentProfile() {
   }
 
   function sendReminderWhatsapp() {
-    if (!openWhatsappReminder(reminderInfo())) setNotice('This student has no mobile number on file.');
+    if (!openWhatsappReminder(reminderInfo(), librarySettings)) setNotice('This student has no mobile number on file.');
   }
 
   function sendReminderSms() {
-    if (!openSmsReminder(reminderInfo())) setNotice('This student has no mobile number on file.');
+    if (!openSmsReminder(reminderInfo(), librarySettings)) setNotice('This student has no mobile number on file.');
   }
 
   function sendReminderEmail() {
-    if (!openEmailReminder(reminderInfo())) setNotice('This student has no email address on file.');
+    if (!openEmailReminder(reminderInfo(), librarySettings)) setNotice('This student has no email address on file.');
   }
 
   async function viewReceipt(payment) {

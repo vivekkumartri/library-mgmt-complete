@@ -1,10 +1,11 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState } from '../components/AsyncState';
 import { useAuth } from '../context/AuthContext';
 import ChangePasswordCard from '../components/ChangePasswordCard';
 import { formatDate } from '../utils/formatDate';
+import { REMINDER_TEMPLATE_KEYS, DEFAULT_TEMPLATES, FIELD_DEFS, fillTemplate } from '../utils/reminders';
 
 const WEEKDAYS = [
   ['0', 'Sun'], ['1', 'Mon'], ['2', 'Tue'], ['3', 'Wed'], ['4', 'Thu'], ['5', 'Fri'], ['6', 'Sat'],
@@ -253,6 +254,8 @@ export default function Settings() {
         </button>
       </div>
 
+      <ReminderTemplatesSettings settings={settings} set={set} saving={saving} onSave={saveSettings} />
+
       <div className="card" style={{ marginBottom: 24 }}>
         <h3>{t('settingsPage.lateFeeConfig')}</h3>
         <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
@@ -458,6 +461,165 @@ export default function Settings() {
       )}
 
       {user?.role === 'super_admin' && <BackupsPanel />}
+    </div>
+  );
+}
+
+const REMINDER_CHANNELS = [
+  { key: REMINDER_TEMPLATE_KEYS.whatsapp, label: 'WhatsApp message' },
+  { key: REMINDER_TEMPLATE_KEYS.sms, label: 'SMS message' },
+  { key: REMINDER_TEMPLATE_KEYS.emailBody, label: 'Email body', subjectKey: REMINDER_TEMPLATE_KEYS.emailSubject },
+];
+
+/** Shown from "+ Add field" — inserts the clicked field's {{token}} into the textarea at the last known cursor position. */
+function FieldPickerDrawer({ onPick, onClose }) {
+  return (
+    <div className="drawer-backdrop" onClick={onClose}>
+      <div className="drawer" onClick={(e) => e.stopPropagation()}>
+        <h3>Insert a field</h3>
+        <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+          Choose a field to insert at your cursor. It's filled in automatically with that student's data when the
+          reminder is sent.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {FIELD_DEFS.map((f) => (
+            <button key={f.token} type="button" className="btn btn-outline" style={{ justifyContent: 'flex-start' }} onClick={() => onPick(f.token)}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <button className="btn btn-outline btn-block" style={{ marginTop: 12 }} onClick={onClose}>
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** One channel's editable template: a textarea (plus subject field for email), an "+ Add field" picker, and a live preview using sample data. */
+function TemplateEditor({ label, value, subjectValue, onChangeBody, onChangeSubject }) {
+  const textareaRef = useRef(null);
+  const [showPicker, setShowPicker] = useState(false);
+  // Tracks which field (body vs subject) the picker should insert into —
+  // only relevant for the email channel, which has both.
+  const [pickerTarget, setPickerTarget] = useState('body');
+  const [showPreview, setShowPreview] = useState(false);
+
+  function openPicker(target) {
+    setPickerTarget(target);
+    setShowPicker(true);
+  }
+
+  function insertToken(token) {
+    const placeholder = `{{${token}}}`;
+    if (pickerTarget === 'subject') {
+      onChangeSubject((subjectValue || '') + placeholder);
+      setShowPicker(false);
+      return;
+    }
+    const el = textareaRef.current;
+    if (!el) {
+      onChangeBody((value || '') + placeholder);
+      setShowPicker(false);
+      return;
+    }
+    const start = el.selectionStart ?? value.length;
+    const end = el.selectionEnd ?? value.length;
+    const next = `${value.slice(0, start)}${placeholder}${value.slice(end)}`;
+    onChangeBody(next);
+    setShowPicker(false);
+    // Restore focus + caret right after the inserted token, on the next tick
+    // once the textarea's value has actually updated.
+    requestAnimationFrame(() => {
+      el.focus();
+      const pos = start + placeholder.length;
+      el.setSelectionRange(pos, pos);
+    });
+  }
+
+  const sampleInfo = {
+    fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', mobile: '9999999999', email: 'rahul@example.com',
+    joiningDate: '2026-08-01', seatLabel: 'Floor 1, Seat 12 (06:00 – 12:00)', lastPaymentText: '₹1000 on 1 August 2026 (Receipt RCPT-2026-0001)',
+    balance: 1000, dueDate: '2026-09-01', libraryName: 'Pilaan Library', libraryAddress: '123 MG Road, Pune', libraryPhone: '+91 98765 43210',
+  };
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <h4 style={{ margin: '0 0 8px' }}>{label}</h4>
+      {subjectValue !== undefined && (
+        <div className="field">
+          <label>Subject</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input className="input" value={subjectValue} onChange={(e) => onChangeSubject(e.target.value)} style={{ flex: 1 }} />
+            <button type="button" className="btn btn-outline" onClick={() => openPicker('subject')}>
+              + Add field
+            </button>
+          </div>
+        </div>
+      )}
+      <div className="field">
+        <label>Message</label>
+        <textarea
+          ref={textareaRef}
+          className="input"
+          rows={10}
+          style={{ fontFamily: 'monospace', fontSize: 13 }}
+          value={value}
+          onChange={(e) => onChangeBody(e.target.value)}
+        />
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-outline" onClick={() => openPicker('body')}>
+          + Add field
+        </button>
+        <button type="button" className="btn btn-outline" onClick={() => setShowPreview((v) => !v)}>
+          {showPreview ? 'Hide preview' : 'Preview with sample data'}
+        </button>
+      </div>
+      {showPreview && (
+        <div className="card" style={{ marginTop: 8, background: 'var(--color-surface-sunken)', whiteSpace: 'pre-wrap', fontSize: 13 }}>
+          {subjectValue !== undefined && (
+            <p style={{ margin: '0 0 8px' }}>
+              <strong>Subject:</strong> {fillTemplate(subjectValue, sampleInfo)}
+            </p>
+          )}
+          {fillTemplate(value, sampleInfo)}
+        </div>
+      )}
+      {showPicker && <FieldPickerDrawer onPick={insertToken} onClose={() => setShowPicker(false)} />}
+    </div>
+  );
+}
+
+/**
+ * Lets an admin fully rewrite the WhatsApp/SMS/email reminder templates
+ * sent from the student profile and seat map drawer (see
+ * src/utils/reminders.js). Stored as plain settings keys so they save
+ * through the same PUT /settings this whole page already uses — no
+ * separate save button or endpoint.
+ */
+function ReminderTemplatesSettings({ settings, set, saving, onSave }) {
+  return (
+    <div className="card" style={{ marginBottom: 24 }}>
+      <h3>Payment reminder templates</h3>
+      <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
+        Customize the message sent when an admin clicks "Send reminder" on a student's profile or the seat map.
+        Click "+ Add field" to insert a student's data (name, due amount, etc.) — it's filled in automatically for
+        each student when the reminder is sent.
+      </p>
+      {REMINDER_CHANNELS.map((channel) => (
+        <TemplateEditor
+          key={channel.key}
+          label={channel.label}
+          value={settings[channel.key] ?? DEFAULT_TEMPLATES[channel.key]}
+          subjectValue={channel.subjectKey ? (settings[channel.subjectKey] ?? DEFAULT_TEMPLATES[channel.subjectKey]) : undefined}
+          onChangeBody={(v) => set(channel.key, v)}
+          onChangeSubject={channel.subjectKey ? (v) => set(channel.subjectKey, v) : undefined}
+        />
+      ))}
+      <button className="btn btn-primary" disabled={saving} onClick={onSave}>
+        {saving ? 'Saving…' : 'Save templates'}
+      </button>
     </div>
   );
 }

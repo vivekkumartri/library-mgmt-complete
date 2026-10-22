@@ -1,57 +1,101 @@
 import { formatDate } from './formatDate';
 
 /**
- * Builds a bilingual (English/Hindi) payment reminder message and opens it
- * via WhatsApp click-to-chat, the device's native SMS app, or mailto —
- * shared by the student profile page and the seat map's seat detail
- * drawer so both surfaces send an identical reminder.
- *
- * `info` fields (all optional except fullName/studentId):
- *   fullName, studentId, mobile, email, joiningDate, seatLabel,
- *   lastPaymentText, balance, dueDate, libraryName, libraryAddress,
- *   libraryPhone
+ * Payment reminder templates — admin-customizable free text with
+ * {{placeholder}} tokens, edited in Settings (ReminderTemplatesSettings)
+ * and stored under these Settings-sheet keys. FIELD_DEFS is the single
+ * source of truth both for what Settings' "+ Add field" picker offers and
+ * for what fillTemplate() actually substitutes, so a token can never be
+ * typo'd into existence — it only ever gets there via the picker.
  */
-export function buildReminderMessage(info) {
-  const {
-    fullName, studentId, joiningDate, seatLabel,
-    lastPaymentText, balance, dueDate,
-    libraryName, libraryAddress, libraryPhone,
-  } = info;
+export const REMINDER_TEMPLATE_KEYS = {
+  whatsapp: 'reminder_template_whatsapp',
+  sms: 'reminder_template_sms',
+  emailSubject: 'reminder_template_email_subject',
+  emailBody: 'reminder_template_email_body',
+};
 
-  const dueLineEn = balance > 0
-    ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}.`
-    : 'you have no pending dues at the moment.';
-  const dueLineHi = balance > 0
-    ? `आपकी बकाया राशि ₹${balance} है${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना है` : ''}।`
-    : 'आपकी कोई बकाया राशि नहीं है।';
+export const FIELD_DEFS = [
+  { token: 'studentName', label: 'Student name' },
+  { token: 'studentId', label: 'Student ID' },
+  { token: 'mobile', label: 'Mobile number' },
+  { token: 'email', label: 'Email address' },
+  { token: 'joiningDate', label: 'Joining date' },
+  { token: 'seat', label: 'Seat' },
+  { token: 'lastPayment', label: 'Last payment' },
+  { token: 'dueAmount', label: 'Due amount (₹)' },
+  { token: 'dueDate', label: 'Due date' },
+  { token: 'libraryName', label: 'Library name' },
+  { token: 'libraryAddress', label: 'Library address' },
+  { token: 'libraryPhone', label: 'Library phone' },
+];
 
-  const libName = libraryName || 'the library';
-  const libAddress = libraryAddress ? `\nAddress: ${libraryAddress}` : '';
-  const libPhone = libraryPhone ? `\nPhone: ${libraryPhone}` : '';
-  const libAddressHi = libraryAddress ? `\nपता: ${libraryAddress}` : '';
-  const libPhoneHi = libraryPhone ? `\nफोन: ${libraryPhone}` : '';
+const DEFAULT_WHATSAPP_SMS_TEMPLATE = `Hi {{studentName}}, this is a reminder from {{libraryName}} — your due amount is ₹{{dueAmount}}, due by {{dueDate}}.
 
-  const messageEn = `Hi ${fullName}, this is a reminder from ${libName} — ${dueLineEn}
+Student ID: {{studentId}}
+Seat: {{seat}}
+Last payment: {{lastPayment}}
 
-Student ID: ${studentId}
-Joining date: ${joiningDate ? formatDate(joiningDate) : '—'}
-Seat: ${seatLabel || 'Not allocated'}
-Last payment: ${lastPaymentText || 'No payment recorded yet'}
-${libName}${libAddress}${libPhone}
+Please clear your dues at your earliest convenience. Thank you!
 
-Please clear your dues at your earliest convenience. Thank you!`;
+---
 
-  const messageHi = `नमस्ते ${fullName}, यह ${libName} की तरफ से एक रिमाइंडर है — ${dueLineHi}
+नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — आपकी बकाया राशि ₹{{dueAmount}} है, जिसे {{dueDate}} तक जमा करना है।
 
-स्टूडेंट आईडी: ${studentId}
-जॉइनिंग तिथि: ${joiningDate ? formatDate(joiningDate) : '—'}
-सीट: ${seatLabel || 'कोई सीट आवंटित नहीं'}
-पिछला भुगतान: ${lastPaymentText || 'अभी तक कोई भुगतान नहीं हुआ'}
-${libName}${libAddressHi}${libPhoneHi}
+स्टूडेंट आईडी: {{studentId}}
+सीट: {{seat}}
+पिछला भुगतान: {{lastPayment}}
 
 कृपया जल्द से जल्द अपना भुगतान करें। धन्यवाद!`;
 
-  return `${messageEn}\n\n---\n\n${messageHi}`;
+const DEFAULT_EMAIL_SUBJECT = 'Payment Reminder from {{libraryName}} / भुगतान रिमाइंडर';
+const DEFAULT_EMAIL_BODY = DEFAULT_WHATSAPP_SMS_TEMPLATE;
+
+export const DEFAULT_TEMPLATES = {
+  [REMINDER_TEMPLATE_KEYS.whatsapp]: DEFAULT_WHATSAPP_SMS_TEMPLATE,
+  [REMINDER_TEMPLATE_KEYS.sms]: DEFAULT_WHATSAPP_SMS_TEMPLATE,
+  [REMINDER_TEMPLATE_KEYS.emailSubject]: DEFAULT_EMAIL_SUBJECT,
+  [REMINDER_TEMPLATE_KEYS.emailBody]: DEFAULT_EMAIL_BODY,
+};
+
+/** Builds the {{token}} -> display-string map from an `info` object (see callers for its shape). */
+function fieldValues(info) {
+  const {
+    fullName, studentId, mobile, email, joiningDate, seatLabel,
+    lastPaymentText, balance, dueDate, libraryName, libraryAddress, libraryPhone,
+  } = info;
+  return {
+    studentName: fullName || '',
+    studentId: studentId || '',
+    mobile: mobile || '',
+    email: email || '',
+    joiningDate: joiningDate ? formatDate(joiningDate) : '—',
+    seat: seatLabel || 'Not allocated',
+    lastPayment: lastPaymentText || 'No payment recorded yet',
+    dueAmount: balance > 0 ? String(balance) : '0',
+    dueDate: dueDate ? formatDate(dueDate) : '—',
+    libraryName: libraryName || 'the library',
+    libraryAddress: libraryAddress || '',
+    libraryPhone: libraryPhone || '',
+  };
+}
+
+/** Replaces every {{token}} in `template` with its value from `info`. Unknown tokens are left as-is. */
+export function fillTemplate(template, info) {
+  const values = fieldValues(info);
+  return (template || '').replace(/\{\{(\w+)\}\}/g, (match, token) =>
+    Object.prototype.hasOwnProperty.call(values, token) ? values[token] : match
+  );
+}
+
+/**
+ * Builds the WhatsApp/SMS message from the admin's saved template (or the
+ * built-in default if none is saved yet). `templates` is the flat
+ * {key: value} object GET /settings already returns.
+ */
+export function buildReminderMessage(info, templates = {}) {
+  const template = templates[REMINDER_TEMPLATE_KEYS.whatsapp] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.whatsapp];
+  return fillTemplate(template, info);
 }
 
 /** Normalizes a raw mobile number to a WhatsApp/SMS-ready "91XXXXXXXXXX" string, or null if missing. */
@@ -61,29 +105,32 @@ export function toReminderPhone(mobile) {
   return digits.length === 10 ? `91${digits}` : digits;
 }
 
-export function openWhatsappReminder(info) {
+export function openWhatsappReminder(info, templates = {}) {
   const phone = toReminderPhone(info.mobile);
   if (!phone) return false;
-  const message = buildReminderMessage(info);
+  const template = templates[REMINDER_TEMPLATE_KEYS.whatsapp] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.whatsapp];
+  const message = fillTemplate(template, info);
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
 
-export function openSmsReminder(info) {
+export function openSmsReminder(info, templates = {}) {
   const phone = toReminderPhone(info.mobile);
   if (!phone) return false;
-  const message = buildReminderMessage(info);
+  const template = templates[REMINDER_TEMPLATE_KEYS.sms] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.sms];
+  const message = fillTemplate(template, info);
   const separator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
   window.location.href = `sms:+${phone}${separator}body=${encodeURIComponent(message)}`;
   return true;
 }
 
-export function openEmailReminder(info) {
+export function openEmailReminder(info, templates = {}) {
   if (!info.email) return false;
-  const message = buildReminderMessage(info);
-  const libName = info.libraryName || 'Library';
-  const subject = `Payment Reminder from ${libName} / भुगतान रिमाइंडर`;
+  const subjectTemplate = templates[REMINDER_TEMPLATE_KEYS.emailSubject] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.emailSubject];
+  const bodyTemplate = templates[REMINDER_TEMPLATE_KEYS.emailBody] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.emailBody];
+  const subject = fillTemplate(subjectTemplate, info);
+  const message = fillTemplate(bodyTemplate, info);
   window.location.href = `mailto:${info.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
   return true;
 }

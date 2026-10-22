@@ -79,15 +79,15 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
   }
 
   function sendReminderWhatsapp(a) {
-    if (!openWhatsappReminder(reminderInfoFor(a))) setError('This student has no mobile number on file.');
+    if (!openWhatsappReminder(reminderInfoFor(a), librarySettings)) setError('This student has no mobile number on file.');
   }
 
   function sendReminderSms(a) {
-    if (!openSmsReminder(reminderInfoFor(a))) setError('This student has no mobile number on file.');
+    if (!openSmsReminder(reminderInfoFor(a), librarySettings)) setError('This student has no mobile number on file.');
   }
 
   function sendReminderEmail(a) {
-    if (!openEmailReminder(reminderInfoFor(a))) setError('This student has no email address on file.');
+    if (!openEmailReminder(reminderInfoFor(a), librarySettings)) setError('This student has no email address on file.');
   }
 
   async function markAttendance(studentId, status) {
