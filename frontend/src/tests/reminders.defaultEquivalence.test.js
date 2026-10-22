@@ -205,3 +205,55 @@ describe('number of days overdue is included once a payment is actually overdue'
     expect(notOverdue).toBe('0 days overdue for Rahul Kumar');
   });
 });
+
+describe('dueLine/dueLineHi are decomposed into individually insertable sub-tokens', () => {
+  const baseInfo = { fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', balance: 500 };
+  const customTemplates = {
+    [REMINDER_TEMPLATE_KEYS.whatsapp]:
+      '{{studentName}} owes {{dueAmount}} ({{dueVerb}} due {{dueDate}}){{overdueSuffix}}',
+  };
+  const customTemplatesHi = {
+    [REMINDER_TEMPLATE_KEYS.whatsapp]:
+      '{{studentName}} {{dueVerbHi}} बकाया{{overdueSuffixHi}}',
+  };
+
+  test('{{dueVerb}} is "is" for a future/today due date and "was" once overdue', () => {
+    expect(buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(5) }, customTemplates))
+      .toBe(`Rahul Kumar owes 500 (is due ${formatDate(isoDaysFromToday(5))})`);
+    expect(buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(0) }, customTemplates))
+      .toContain('(is due');
+    expect(buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-5) }, customTemplates))
+      .toContain('(was due');
+  });
+
+  test('{{dueVerbHi}} is "है" for a future/today due date and "था" once overdue', () => {
+    expect(buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(5) }, customTemplatesHi))
+      .toContain('है बकाया');
+    expect(buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-5) }, customTemplatesHi))
+      .toContain('था बकाया');
+  });
+
+  test('{{overdueSuffix}}/{{overdueSuffixHi}} are blank unless actually overdue', () => {
+    const notYetDue = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(5) }, customTemplates);
+    expect(notYetDue).not.toContain('overdue');
+    const overdue = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-5) }, customTemplates);
+    expect(overdue).toContain('(5 days overdue)');
+  });
+
+  test('{{noDuesLine}}/{{noDuesLineHi}} are insertable on their own for a zero-balance student', () => {
+    const templates = { [REMINDER_TEMPLATE_KEYS.whatsapp]: '{{studentName}}: {{noDuesLine}} / {{noDuesLineHi}}' };
+    const message = buildReminderMessage({ ...baseInfo, balance: 0 }, templates);
+    expect(message).toBe('Rahul Kumar: you have no pending dues at the moment. / आपकी कोई बकाया राशि नहीं है।');
+  });
+
+  test('manually composing dueVerb + overdueSuffix reproduces the same wording as the built-in dueLine', () => {
+    const info = { ...baseInfo, dueDate: isoDaysFromToday(-3) };
+    const manual = buildReminderMessage(info, {
+      [REMINDER_TEMPLATE_KEYS.whatsapp]: 'your due amount is ₹{{dueAmount}}, due by {{dueDate}}{{overdueSuffix}}.',
+    });
+    const builtin = buildReminderMessage(info, {
+      [REMINDER_TEMPLATE_KEYS.whatsapp]: '{{dueLine}}',
+    });
+    expect(manual).toBe(builtin);
+  });
+});

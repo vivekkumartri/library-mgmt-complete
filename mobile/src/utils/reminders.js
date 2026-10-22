@@ -28,8 +28,14 @@ export const FIELD_DEFS = [
   { token: 'libraryName', label: 'Library name' },
   { token: 'libraryAddress', label: 'Library address' },
   { token: 'libraryPhone', label: 'Library phone' },
-  { token: 'dueLine', label: 'Due status sentence (English)' },
-  { token: 'dueLineHi', label: 'Due status sentence (Hindi)' },
+  { token: 'dueLine', label: 'Due status — full sentence (English)' },
+  { token: 'dueLineHi', label: 'Due status — full sentence (Hindi)' },
+  { token: 'dueVerb', label: 'Due status — "is"/"was" (English)' },
+  { token: 'dueVerbHi', label: 'Due status — "है"/"था" (Hindi)' },
+  { token: 'noDuesLine', label: 'Due status — "no dues owed" wording (English)' },
+  { token: 'noDuesLineHi', label: 'Due status — "no dues owed" wording (Hindi)' },
+  { token: 'overdueSuffix', label: 'Due status — "(N days overdue)" suffix (English, blank if not overdue)' },
+  { token: 'overdueSuffixHi', label: 'Due status — "(N दिन से बकाया)" suffix (Hindi, blank if not overdue)' },
   { token: 'libraryAddressLine', label: 'Library address line (English, blank if not set)' },
   { token: 'libraryAddressLineHi', label: 'Library address line (Hindi, blank if not set)' },
   { token: 'libraryPhoneLine', label: 'Library phone line (English, blank if not set)' },
@@ -136,13 +142,23 @@ function fieldValues(info) {
     libraryAddress: libraryAddress || '',
     libraryPhone: libraryPhone || '',
     daysOverdue: String(daysOverdue(dueDate)),
-    dueLine: balance > 0
-      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : ''}.`
-      : 'you have no pending dues at the moment.',
     // Hindi needs tense agreement that English doesn't: a due date already
     // in the past reads naturally as "था" (was due), not "है" (is due) —
     // isPastDue compares calendar days only, so "due today" still gets the
-    // present tense rather than being misread as already overdue.
+    // present tense rather than being misread as already overdue. Each
+    // piece of the due-status sentence is its own token so a custom
+    // template can rearrange/drop them individually; dueLine/dueLineHi
+    // below are just that same assembly, kept as a convenience for anyone
+    // who wants the whole default sentence without composing it by hand.
+    dueVerb: isPastDue(dueDate) ? 'was' : 'is',
+    dueVerbHi: isPastDue(dueDate) ? 'था' : 'है',
+    noDuesLine: 'you have no pending dues at the moment.',
+    noDuesLineHi: 'आपकी कोई बकाया राशि नहीं है।',
+    overdueSuffix: isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : '',
+    overdueSuffixHi: isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} दिन से बकाया)` : '',
+    dueLine: balance > 0
+      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : ''}.`
+      : 'you have no pending dues at the moment.',
     dueLineHi: balance > 0
       ? `आपकी बकाया राशि ₹${balance} ${isPastDue(dueDate) ? 'थी' : 'है'}${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना ${isPastDue(dueDate) ? 'था' : 'है'}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} दिन से बकाया)` : ''}।`
       : 'आपकी कोई बकाया राशि नहीं है।',
