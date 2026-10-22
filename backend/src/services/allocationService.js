@@ -296,6 +296,8 @@ class AllocationService {
           studentId: a.student_id,
           studentName: student?.full_name || '',
           studentMobile: student?.mobile || '',
+          studentEmail: student?.email || '',
+          studentJoiningDate: student?.joining_date || null,
           startDate: a.start_date,
           startTime: a.start_time,
           endTime: a.end_time,

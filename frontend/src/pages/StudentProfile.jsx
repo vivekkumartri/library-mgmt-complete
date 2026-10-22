@@ -6,6 +6,7 @@ import SignaturePad from '../components/SignaturePad';
 import CameraCapture from '../components/CameraCapture';
 import EndAllocationDrawer from '../components/EndAllocationDrawer';
 import { formatDate, formatMonth } from '../utils/formatDate';
+import { openWhatsappReminder, openSmsReminder, openEmailReminder } from '../utils/reminders';
 
 function useBlobUrl(fetchFn, deps) {
   const [url, setUrl] = useState(null);
@@ -186,96 +187,44 @@ export default function StudentProfile() {
     }
   }
 
-  function buildReminderMessage() {
-    const dueLineEn = paymentStatus?.balance > 0
-      ? `your due amount is ₹${paymentStatus.balance}${paymentStatus.dueDate ? `, due by ${formatDate(paymentStatus.dueDate)}` : ''}.`
-      : 'you have no pending dues at the moment.';
-    const dueLineHi = paymentStatus?.balance > 0
-      ? `आपकी बकाया राशि ₹${paymentStatus.balance} है${paymentStatus.dueDate ? `, जिसे ${formatDate(paymentStatus.dueDate)} तक जमा करना है` : ''}।`
-      : 'आपकी कोई बकाया राशि नहीं है।';
-
+  function reminderInfo() {
     const activeAllocation = allocations.find((a) => a.status === 'active') || allocations[0];
-    const seatLabelEn = activeAllocation
+    const seatLabel = activeAllocation
       ? `${activeAllocation.floor_name ? `${activeAllocation.floor_name}, ` : ''}Seat ${activeAllocation.seat_number ?? activeAllocation.seat_id} (${activeAllocation.start_time} – ${activeAllocation.end_time})`
-      : 'Not allocated';
-    const seatLabelHi = activeAllocation
-      ? `${activeAllocation.floor_name ? `${activeAllocation.floor_name}, ` : ''}सीट ${activeAllocation.seat_number ?? activeAllocation.seat_id} (${activeAllocation.start_time} – ${activeAllocation.end_time})`
-      : 'कोई सीट आवंटित नहीं';
-
+      : null;
     const lastPayment = payments
       .filter((p) => p.status !== 'void')
       .slice()
       .sort((a, b) => (a.payment_date < b.payment_date ? 1 : -1))[0];
-    const lastPaymentEn = lastPayment
+    const lastPaymentText = lastPayment
       ? `₹${lastPayment.amount} on ${formatDate(lastPayment.payment_date)} (Receipt ${lastPayment.receipt_number})`
-      : 'No payment recorded yet';
-    const lastPaymentHi = lastPayment
-      ? `₹${lastPayment.amount}, ${formatDate(lastPayment.payment_date)} को (रसीद ${lastPayment.receipt_number})`
-      : 'अभी तक कोई भुगतान नहीं हुआ';
-
-    const libName = librarySettings?.library_name || 'the library';
-    const libAddress = librarySettings?.library_address ? `\nAddress: ${librarySettings.library_address}` : '';
-    const libPhone = librarySettings?.library_phone ? `\nPhone: ${librarySettings.library_phone}` : '';
-    const libAddressHi = librarySettings?.library_address ? `\nपता: ${librarySettings.library_address}` : '';
-    const libPhoneHi = librarySettings?.library_phone ? `\nफोन: ${librarySettings.library_phone}` : '';
-
-    const messageEn = `Hi ${student.full_name}, this is a reminder from ${libName} — ${dueLineEn}
-
-Student ID: ${student.student_id}
-Joining date: ${formatDate(student.joining_date)}
-Seat: ${seatLabelEn}
-Last payment: ${lastPaymentEn}
-${libName}${libAddress}${libPhone}
-
-Please clear your dues at your earliest convenience. Thank you!`;
-
-    const messageHi = `नमस्ते ${student.full_name}, यह ${libName} की तरफ से एक रिमाइंडर है — ${dueLineHi}
-
-स्टूडेंट आईडी: ${student.student_id}
-जॉइनिंग तिथि: ${formatDate(student.joining_date)}
-सीट: ${seatLabelHi}
-पिछला भुगतान: ${lastPaymentHi}
-${libName}${libAddressHi}${libPhoneHi}
-
-कृपया जल्द से जल्द अपना भुगतान करें। धन्यवाद!`;
-
-    return `${messageEn}\n\n---\n\n${messageHi}`;
-  }
-
-  function getReminderPhone() {
-    const mobile = (student.mobile || '').replace(/\D/g, '');
-    if (!mobile) {
-      setNotice('This student has no mobile number on file.');
-      return null;
-    }
-    return mobile.length === 10 ? `91${mobile}` : mobile;
+      : null;
+    return {
+      fullName: student.full_name,
+      studentId: student.student_id,
+      mobile: student.mobile,
+      email: student.email,
+      joiningDate: student.joining_date,
+      seatLabel,
+      lastPaymentText,
+      balance: paymentStatus?.balance,
+      dueDate: paymentStatus?.dueDate,
+      libraryName: librarySettings?.library_name,
+      libraryAddress: librarySettings?.library_address,
+      libraryPhone: librarySettings?.library_phone,
+    };
   }
 
   function sendReminderWhatsapp() {
-    const phone = getReminderPhone();
-    if (!phone) return;
-    const message = buildReminderMessage();
-    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
-    window.open(url, '_blank', 'noopener,noreferrer');
+    if (!openWhatsappReminder(reminderInfo())) setNotice('This student has no mobile number on file.');
   }
 
   function sendReminderSms() {
-    const phone = getReminderPhone();
-    if (!phone) return;
-    const message = buildReminderMessage();
-    const separator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
-    window.location.href = `sms:+${phone}${separator}body=${encodeURIComponent(message)}`;
+    if (!openSmsReminder(reminderInfo())) setNotice('This student has no mobile number on file.');
   }
 
   function sendReminderEmail() {
-    if (!student.email) {
-      setNotice('This student has no email address on file.');
-      return;
-    }
-    const message = buildReminderMessage();
-    const libName = librarySettings?.library_name || 'Library';
-    const subject = `Payment Reminder from ${libName} / भुगतान रिमाइंडर`;
-    window.location.href = `mailto:${student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+    if (!openEmailReminder(reminderInfo())) setNotice('This student has no email address on file.');
   }
 
   async function viewReceipt(payment) {

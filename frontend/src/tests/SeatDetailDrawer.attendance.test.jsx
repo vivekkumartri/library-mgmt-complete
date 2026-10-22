@@ -5,10 +5,11 @@ import '../i18n';
 import SeatDetailDrawer from '../components/SeatDetailDrawer';
 
 vi.mock('../services/api', () => {
+  const get = vi.fn(() => Promise.resolve({ data: { settings: {} } }));
   const post = vi.fn();
   const patch = vi.fn();
   return {
-    default: { post, patch },
+    default: { get, post, patch },
     apiErrorMessage: (err, fallback) => err?.response?.data?.error?.message || fallback,
   };
 });
@@ -20,7 +21,11 @@ const seat = {
   seat_number: 5,
   status: 'available',
   timeline: [
-    { allocationId: 'a1', studentId: 'LIB-2026-0001', studentName: 'Rahul Kumar', studentMobile: '9999999999', startTime: '06:00', endTime: '12:00', monthlyFee: 1000 },
+    {
+      allocationId: 'a1', studentId: 'LIB-2026-0001', studentName: 'Rahul Kumar',
+      studentMobile: '9999999999', studentEmail: 'rahul@example.com',
+      startTime: '06:00', endTime: '12:00', monthlyFee: 1000,
+    },
   ],
 };
 const floor = { floor_id: 'floor-1', floor_name: 'Floor 1' };
@@ -62,5 +67,30 @@ describe('SeatDetailDrawer — mark attendance from the seat map', () => {
     fireEvent.click(absentButtons[0]);
 
     await waitFor(() => expect(screen.getByText('Network error')).toBeInTheDocument());
+  });
+});
+
+describe('SeatDetailDrawer — payment reminders', () => {
+  test('shows WhatsApp/SMS/Email reminder buttons when the student has a mobile and email on file', async () => {
+    renderDrawer();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/settings'));
+    expect(screen.getByText('WhatsApp')).toBeInTheDocument();
+    expect(screen.getByText('SMS')).toBeInTheDocument();
+    expect(screen.getByText('Email')).toBeInTheDocument();
+  });
+
+  test('opens WhatsApp click-to-chat with the student\'s number and a reminder message', async () => {
+    const openSpy = vi.spyOn(window, 'open').mockImplementation(() => {});
+    renderDrawer();
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith('/settings'));
+
+    fireEvent.click(screen.getByText('WhatsApp'));
+
+    expect(openSpy).toHaveBeenCalledWith(
+      expect.stringContaining('https://wa.me/919999999999?text='),
+      '_blank',
+      'noopener,noreferrer'
+    );
+    openSpy.mockRestore();
   });
 });

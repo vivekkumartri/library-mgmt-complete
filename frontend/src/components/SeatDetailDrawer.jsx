@@ -5,6 +5,7 @@ import api, { apiErrorMessage } from '../services/api';
 import AllocateForm from './AllocateForm';
 import EndAllocationDrawer from './EndAllocationDrawer';
 import { formatDate } from '../utils/formatDate';
+import { openWhatsappReminder, openSmsReminder, openEmailReminder } from '../utils/reminders';
 
 function StudentPhoto({ studentId }) {
   const [url, setUrl] = useState(null);
@@ -53,6 +54,40 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
   // navigating away to the Attendance page (mirrors Attendance.jsx's own
   // present/absent buttons and POST /attendance call).
   const [attendanceMarks, setAttendanceMarks] = useState({});
+  const [librarySettings, setLibrarySettings] = useState(null);
+
+  useEffect(() => {
+    api.get('/settings').then((res) => setLibrarySettings(res.data.settings)).catch(() => {});
+  }, []);
+
+  function reminderInfoFor(a) {
+    return {
+      fullName: a.studentName || a.studentId,
+      studentId: a.studentId,
+      mobile: a.studentMobile,
+      email: a.studentEmail,
+      joiningDate: a.studentJoiningDate || a.startDate,
+      seatLabel: `${floor?.floor_name ? `${floor.floor_name}, ` : ''}Seat ${seat.seat_number} (${a.startTime} – ${a.endTime})`,
+      lastPaymentText: a.lastPaymentDate ? `Last paid ${formatDate(a.lastPaymentDate)}` : null,
+      balance: a.paymentAmountDue,
+      dueDate: a.paymentDueDate,
+      libraryName: librarySettings?.library_name,
+      libraryAddress: librarySettings?.library_address,
+      libraryPhone: librarySettings?.library_phone,
+    };
+  }
+
+  function sendReminderWhatsapp(a) {
+    if (!openWhatsappReminder(reminderInfoFor(a))) setError('This student has no mobile number on file.');
+  }
+
+  function sendReminderSms(a) {
+    if (!openSmsReminder(reminderInfoFor(a))) setError('This student has no mobile number on file.');
+  }
+
+  function sendReminderEmail(a) {
+    if (!openEmailReminder(reminderInfoFor(a))) setError('This student has no email address on file.');
+  }
 
   async function markAttendance(studentId, status) {
     const previous = attendanceMarks[studentId];
@@ -187,6 +222,36 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
                   <button className="btn btn-outline" onClick={() => navigate(`/students/${a.studentId}`)}>
                     {t('common.view')}
                   </button>
+                  {a.studentMobile && (
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: '0 10px', height: 32, fontSize: 12 }}
+                        onClick={() => sendReminderWhatsapp(a)}
+                        title={`Send ${a.studentName || a.studentId} a payment reminder via WhatsApp`}
+                      >
+                        WhatsApp
+                      </button>
+                      <button
+                        className="btn btn-outline"
+                        style={{ padding: '0 10px', height: 32, fontSize: 12 }}
+                        onClick={() => sendReminderSms(a)}
+                        title={`Send ${a.studentName || a.studentId} a payment reminder via SMS`}
+                      >
+                        SMS
+                      </button>
+                    </div>
+                  )}
+                  {a.studentEmail && (
+                    <button
+                      className="btn btn-outline"
+                      style={{ padding: '0 10px', height: 32, fontSize: 12 }}
+                      onClick={() => sendReminderEmail(a)}
+                      title={`Send ${a.studentName || a.studentId} a payment reminder via email`}
+                    >
+                      Email
+                    </button>
+                  )}
                   <button className="btn btn-outline" onClick={() => setEndingAllocation(a)}>
                     {t('seats.endAllocation')}
                   </button>

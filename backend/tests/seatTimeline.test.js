@@ -58,17 +58,22 @@ describe('AllocationService.seatTimeline — student + automatic payment enrichm
   beforeEach(() => {
     resetStore();
     repos.__store.Seats.push({ seat_id: 'seat-1', status: 'available' });
-    repos.__store.Students.push({ student_id: 'S1', full_name: 'Asha Rao', mobile: '9999900001' });
+    repos.__store.Students.push({
+      student_id: 'S1', full_name: 'Asha Rao', mobile: '9999900001',
+      email: 'asha@example.com', joining_date: '2026-01-01',
+    });
     repos.__store.Seat_Allocations.push({
       allocation_id: 'a1', seat_id: 'seat-1', student_id: 'S1', status: 'active',
       start_date: isoDaysFromNow(0), start_time: '06:00', end_time: '12:00', monthly_fee: 1000,
     });
   });
 
-  test('includes the allocated student\'s name and mobile', async () => {
+  test('includes the allocated student\'s name, mobile, email, and joining date', async () => {
     const [entry] = await AllocationService.seatTimeline('seat-1');
     expect(entry.studentName).toBe('Asha Rao');
     expect(entry.studentMobile).toBe('9999900001');
+    expect(entry.studentEmail).toBe('asha@example.com');
+    expect(entry.studentJoiningDate).toBe('2026-01-01');
   });
 
   test('a student who joined today with no payment yet reads as "due_today" — rent is due from the join date', async () => {
