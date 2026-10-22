@@ -54,13 +54,24 @@ ${libName}${libAddressHi}${libPhoneHi}
   return `${messageEn}\n\n---\n\n${messageHi}`;
 }
 
+/** 'YYYY-MM-DD' for today, offset by `days` (negative = past). Keeps fixture dates relative to whenever this test actually runs. */
+function isoDaysFromToday(days) {
+  const d = new Date();
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Due dates here are always in the future (so the Hindi due line's tense
+// — see the dedicated describe() below — stays present/future "है" and
+// doesn't interfere with this equivalence check, which predates tense
+// awareness and isn't about it).
 const scenarios = [
   {
     name: 'balance owed, due date set, full library info',
     info: {
       fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', joiningDate: '2026-08-01',
       seatLabel: 'Floor 1, Seat 12 (06:00 – 12:00)', lastPaymentText: '₹1000 on 1 August 2026 (Receipt RCPT-2026-0001)',
-      balance: 500, dueDate: '2026-09-01', libraryName: 'Pilaan Library', libraryAddress: '123 MG Road, Pune', libraryPhone: '+91 98765 43210',
+      balance: 500, dueDate: isoDaysFromToday(10), libraryName: 'Pilaan Library', libraryAddress: '123 MG Road, Pune', libraryPhone: '+91 98765 43210',
     },
   },
   {
@@ -76,7 +87,7 @@ const scenarios = [
     info: {
       fullName: 'Amit Shah', studentId: 'LIB-2026-0003', joiningDate: '2026-03-10',
       seatLabel: null, lastPaymentText: null,
-      balance: 300, dueDate: '2026-04-01', libraryName: '', libraryAddress: '', libraryPhone: '',
+      balance: 300, dueDate: isoDaysFromToday(20), libraryName: '', libraryAddress: '', libraryPhone: '',
     },
   },
   {
@@ -84,7 +95,7 @@ const scenarios = [
     info: {
       fullName: 'Neha Verma', studentId: 'LIB-2026-0004', joiningDate: null,
       seatLabel: null, lastPaymentText: null,
-      balance: 1200, dueDate: '2026-05-15', libraryName: 'Pilaan Library', libraryAddress: 'MG Road', libraryPhone: '1234567890',
+      balance: 1200, dueDate: isoDaysFromToday(30), libraryName: 'Pilaan Library', libraryAddress: 'MG Road', libraryPhone: '1234567890',
     },
   },
 ];
@@ -110,5 +121,44 @@ describe('default email subject matches the old hardcoded subject, including its
   test('with no library name set at all, falls back to plain "Library" (not "the library")', () => {
     const newSubject = fillTemplate(DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.emailSubject], { libraryName: '' });
     expect(newSubject).toBe('Payment Reminder from Library / भुगतान रिमाइंडर');
+  });
+});
+
+describe('Hindi due-line tense agrees with whether the due date is past or future', () => {
+  const baseInfo = { fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', balance: 500 };
+
+  test('a due date still in the future reads in present/future tense ("है")', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(10) }, {});
+    expect(message).toContain('आपकी बकाया राशि ₹500 है');
+    expect(message).toContain('जमा करना है');
+    expect(message).not.toContain('थी');
+    expect(message).not.toContain('करना था');
+  });
+
+  test('a due date today (not yet elapsed) still reads in present tense, not past', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(0) }, {});
+    expect(message).toContain('आपकी बकाया राशि ₹500 है');
+    expect(message).toContain('जमा करना है');
+  });
+
+  test('a due date already in the past reads in past tense ("थी"/"था")', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-10) }, {});
+    expect(message).toContain('आपकी बकाया राशि ₹500 थी');
+    expect(message).toContain('जमा करना था');
+    expect(message).not.toContain('बकाया राशि ₹500 है');
+  });
+
+  test('zero balance never mentions tense either way — the "no dues" sentence is used instead', () => {
+    const message = buildReminderMessage({ ...baseInfo, balance: 0, dueDate: isoDaysFromToday(-10) }, {});
+    expect(message).toContain('आपकी कोई बकाया राशि नहीं है');
+    expect(message).not.toContain('थी');
+  });
+
+  test('the English line is unaffected by tense either way (no grammatical ambiguity to fix there)', () => {
+    const future = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(10) }, {});
+    const past = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-10) }, {});
+    const dueLine = (msg) => msg.split('\n')[0];
+    expect(dueLine(future)).toContain('your due amount is ₹500, due by');
+    expect(dueLine(past)).toContain('your due amount is ₹500, due by');
   });
 });
