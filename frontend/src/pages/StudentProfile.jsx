@@ -94,12 +94,13 @@ export default function StudentProfile() {
   const [copiedField, setCopiedField] = useState('');
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [editingAllocationDate, setEditingAllocationDate] = useState(null);
+  const [librarySettings, setLibrarySettings] = useState(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError('');
     try {
-      const [s, a, b, att, v, p, fp, ps] = await Promise.all([
+      const [s, a, b, att, v, p, fp, ps, settingsRes] = await Promise.all([
         api.get(`/students/${id}`),
         api.get('/allocations', { params: { studentId: id } }),
         api.get('/billing', { params: { studentId: id } }),
@@ -108,6 +109,7 @@ export default function StudentProfile() {
         api.get('/payments', { params: { studentId: id } }),
         api.get(`/students/${id}/fee-plans`),
         api.get(`/students/${id}/payment-status`),
+        api.get('/settings'),
       ]);
       setStudent(s.data.student);
       setAllocations(a.data.allocations);
@@ -118,6 +120,7 @@ export default function StudentProfile() {
       setFeeHistory(fp.data.history);
       setCurrentFee(fp.data.current);
       setPaymentStatus(ps.data);
+      setLibrarySettings(settingsRes.data.settings);
     } catch (err) {
       setError(apiErrorMessage(err));
     } finally {
@@ -183,6 +186,98 @@ export default function StudentProfile() {
     }
   }
 
+  function buildReminderMessage() {
+    const dueLineEn = paymentStatus?.balance > 0
+      ? `your due amount is ₹${paymentStatus.balance}${paymentStatus.dueDate ? `, due by ${formatDate(paymentStatus.dueDate)}` : ''}.`
+      : 'you have no pending dues at the moment.';
+    const dueLineHi = paymentStatus?.balance > 0
+      ? `आपकी बकाया राशि ₹${paymentStatus.balance} है${paymentStatus.dueDate ? `, जिसे ${formatDate(paymentStatus.dueDate)} तक जमा करना है` : ''}।`
+      : 'आपकी कोई बकाया राशि नहीं है।';
+
+    const activeAllocation = allocations.find((a) => a.status === 'active') || allocations[0];
+    const seatLabelEn = activeAllocation
+      ? `${activeAllocation.floor_name ? `${activeAllocation.floor_name}, ` : ''}Seat ${activeAllocation.seat_number ?? activeAllocation.seat_id} (${activeAllocation.start_time} – ${activeAllocation.end_time})`
+      : 'Not allocated';
+    const seatLabelHi = activeAllocation
+      ? `${activeAllocation.floor_name ? `${activeAllocation.floor_name}, ` : ''}सीट ${activeAllocation.seat_number ?? activeAllocation.seat_id} (${activeAllocation.start_time} – ${activeAllocation.end_time})`
+      : 'कोई सीट आवंटित नहीं';
+
+    const lastPayment = payments
+      .filter((p) => p.status !== 'void')
+      .slice()
+      .sort((a, b) => (a.payment_date < b.payment_date ? 1 : -1))[0];
+    const lastPaymentEn = lastPayment
+      ? `₹${lastPayment.amount} on ${formatDate(lastPayment.payment_date)} (Receipt ${lastPayment.receipt_number})`
+      : 'No payment recorded yet';
+    const lastPaymentHi = lastPayment
+      ? `₹${lastPayment.amount}, ${formatDate(lastPayment.payment_date)} को (रसीद ${lastPayment.receipt_number})`
+      : 'अभी तक कोई भुगतान नहीं हुआ';
+
+    const libName = librarySettings?.library_name || 'the library';
+    const libAddress = librarySettings?.library_address ? `\nAddress: ${librarySettings.library_address}` : '';
+    const libPhone = librarySettings?.library_phone ? `\nPhone: ${librarySettings.library_phone}` : '';
+    const libAddressHi = librarySettings?.library_address ? `\nपता: ${librarySettings.library_address}` : '';
+    const libPhoneHi = librarySettings?.library_phone ? `\nफोन: ${librarySettings.library_phone}` : '';
+
+    const messageEn = `Hi ${student.full_name}, this is a reminder from ${libName} — ${dueLineEn}
+
+Student ID: ${student.student_id}
+Joining date: ${formatDate(student.joining_date)}
+Seat: ${seatLabelEn}
+Last payment: ${lastPaymentEn}
+${libName}${libAddress}${libPhone}
+
+Please clear your dues at your earliest convenience. Thank you!`;
+
+    const messageHi = `नमस्ते ${student.full_name}, यह ${libName} की तरफ से एक रिमाइंडर है — ${dueLineHi}
+
+स्टूडेंट आईडी: ${student.student_id}
+जॉइनिंग तिथि: ${formatDate(student.joining_date)}
+सीट: ${seatLabelHi}
+पिछला भुगतान: ${lastPaymentHi}
+${libName}${libAddressHi}${libPhoneHi}
+
+कृपया जल्द से जल्द अपना भुगतान करें। धन्यवाद!`;
+
+    return `${messageEn}\n\n---\n\n${messageHi}`;
+  }
+
+  function getReminderPhone() {
+    const mobile = (student.mobile || '').replace(/\D/g, '');
+    if (!mobile) {
+      setNotice('This student has no mobile number on file.');
+      return null;
+    }
+    return mobile.length === 10 ? `91${mobile}` : mobile;
+  }
+
+  function sendReminderWhatsapp() {
+    const phone = getReminderPhone();
+    if (!phone) return;
+    const message = buildReminderMessage();
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
+    window.open(url, '_blank', 'noopener,noreferrer');
+  }
+
+  function sendReminderSms() {
+    const phone = getReminderPhone();
+    if (!phone) return;
+    const message = buildReminderMessage();
+    const separator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
+    window.location.href = `sms:+${phone}${separator}body=${encodeURIComponent(message)}`;
+  }
+
+  function sendReminderEmail() {
+    if (!student.email) {
+      setNotice('This student has no email address on file.');
+      return;
+    }
+    const message = buildReminderMessage();
+    const libName = librarySettings?.library_name || 'Library';
+    const subject = `Payment Reminder from ${libName} / भुगतान रिमाइंडर`;
+    window.location.href = `mailto:${student.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
+  }
+
   async function viewReceipt(payment) {
     try {
       await openReceipt(payment.payment_id, `${payment.receipt_number}.pdf`);
@@ -235,6 +330,21 @@ export default function StudentProfile() {
             <span className={`badge ${URGENCY_BADGE_CLASS[paymentStatus.urgency]}`}>{URGENCY_LABEL[paymentStatus.urgency]}</span>
           )}
           <span className={`badge ${student.status === 'active' ? 'badge-success' : 'badge-neutral'}`}>{student.status}</span>
+          {student.mobile && (
+            <>
+              <button className="btn btn-outline" onClick={sendReminderWhatsapp} title="Opens WhatsApp with a prefilled payment reminder">
+                Send reminder (WhatsApp)
+              </button>
+              <button className="btn btn-outline" onClick={sendReminderSms} title="Opens your SMS app with a prefilled payment reminder">
+                Send reminder (SMS)
+              </button>
+            </>
+          )}
+          {student.email && (
+            <button className="btn btn-outline" onClick={sendReminderEmail} title="Opens your email app with a prefilled payment reminder">
+              Send reminder (Email)
+            </button>
+          )}
         </div>
       </div>
 

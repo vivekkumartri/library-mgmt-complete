@@ -1,14 +1,32 @@
 jest.mock('../src/repositories', () => {
-  const store = { Seats: [], Seat_Allocations: [], Payments: [] };
+  const store = { Seats: [], Seat_Allocations: [], Payments: [], Students: [], Fee_Plans: [] };
   return {
     __store: store,
     seats: {
       findById: jest.fn(async (id) => store.Seats.find((s) => s.seat_id === id) || null),
     },
+    students: {
+      findById: jest.fn(async (id) => store.Students.find((s) => s.student_id === id) || null),
+    },
     payments: {
       findAll: jest.fn(async (filterFn) => {
         const rows = store.Payments;
         return filterFn ? rows.filter(filterFn) : rows;
+      }),
+    },
+    feePlans: {
+      findAll: jest.fn(async (filterFn) => {
+        const rows = store.Fee_Plans;
+        return filterFn ? rows.filter(filterFn) : rows;
+      }),
+      create: jest.fn(async (rec) => {
+        store.Fee_Plans.push(rec);
+        return rec;
+      }),
+      update: jest.fn(async (id, patch) => {
+        const idx = store.Fee_Plans.findIndex((p) => p.fee_plan_id === id);
+        store.Fee_Plans[idx] = { ...store.Fee_Plans[idx], ...patch };
+        return store.Fee_Plans[idx];
       }),
     },
     allocations: {
@@ -39,6 +57,8 @@ function resetStore() {
   repos.__store.Seats.length = 0;
   repos.__store.Seat_Allocations.length = 0;
   repos.__store.Payments.length = 0;
+  repos.__store.Students.length = 0;
+  repos.__store.Fee_Plans.length = 0;
 }
 
 describe('timesOverlap', () => {
@@ -163,10 +183,18 @@ describe('AllocationService.paymentStatusForStudent — discount handling', () =
       amount: 300,
     });
 
-    const result = await AllocationService.paymentStatusForStudent('S1', allocation);
-
-    expect(result.dueDate).toBe('2026-10-01');
-    expect(result.amountDue).toBe(0);
+    // Freeze "now" right at the join date, so one full calendar month's
+    // coverage leaves nothing owed yet — this isolates the discount math
+    // from however much real wall-clock time has since elapsed (the
+    // service defaults `today` to `new Date()` internally).
+    jest.useFakeTimers().setSystemTime(new Date('2026-09-01T00:00:00Z'));
+    try {
+      const result = await AllocationService.paymentStatusForStudent('S1', allocation);
+      expect(result.dueDate).toBe('2026-10-01');
+      expect(result.amountDue).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   test('same student paid against the undiscounted fee would incorrectly read as underpaid (regression guard)', async () => {

@@ -73,13 +73,16 @@ describe('financeService.autoPaymentStatus — billing-record-free due calculati
   });
 
   test('joined 2 months ago, never paid — overdue, two months owed', () => {
-    const status = finance.autoPaymentStatus({ joinDate: '2026-06-28', monthlyFee: 1000, totalPaid: 0, today: TODAY });
+    // Real calendar months: 2026-06-27 -> 2026-07-27 -> 2026-08-27 is
+    // exactly two full months by TODAY (2026-08-27).
+    const status = finance.autoPaymentStatus({ joinDate: '2026-06-27', monthlyFee: 1000, totalPaid: 0, today: TODAY });
     expect(status.urgency).toBe('overdue');
     expect(status.balance).toBe(2000);
   });
 
   test('one month paid, coverage runs out exactly today — due_today, balance settled', () => {
-    const status = finance.autoPaymentStatus({ joinDate: '2026-07-28', monthlyFee: 1000, totalPaid: 1000, today: TODAY });
+    // 2026-07-27 + 1 real calendar month = 2026-08-27 (TODAY) exactly.
+    const status = finance.autoPaymentStatus({ joinDate: '2026-07-27', monthlyFee: 1000, totalPaid: 1000, today: TODAY });
     expect(status.urgency).toBe('due_today');
     expect(status.paidThroughDate).toBe('2026-08-27');
     expect(status.balance).toBe(0);

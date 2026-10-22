@@ -215,6 +215,11 @@ class AllocationService {
    * Powers the seat map's payment-risk coloring and the seat detail
    * drawer; a student with no active allocation, or who just joined and
    * hasn't had a chance to pay yet, reads as 'ok', not overdue.
+   *
+   * A student with no seat at all (e.g. a reading-room-only / home-study
+   * member) still gets this treatment: falls back to their standalone Fee
+   * Plan (set directly on the student, not via an allocation) and their
+   * own joining_date, so dues still accrue and show up the same way.
    */
   async paymentStatusForStudent(studentId, allocation) {
     const [resolvedAllocation, payments, student] = await Promise.all([
@@ -225,9 +230,31 @@ class AllocationService {
     const totalPaid = financeService.sumAmounts(payments.map((p) => Number(p.amount)));
     const lastPaymentDate = payments.reduce((latest, p) => (p.payment_date && p.payment_date > (latest || '') ? p.payment_date : latest), null);
     const studentJoiningDate = student?.joining_date || null;
+
     if (!resolvedAllocation) {
-      return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, studentJoiningDate, monthlyFee: null, paid: totalPaid, owed: 0, lastPaymentDate };
+      const standaloneFee = await feePlanService.getCurrentFee(studentId);
+      if (!standaloneFee) {
+        return { urgency: 'ok', dueDate: null, amountDue: 0, joinDate: null, studentJoiningDate, monthlyFee: null, paid: totalPaid, owed: 0, lastPaymentDate };
+      }
+      const netMonthlyFee = financeService.computePayable({
+        baseFee: standaloneFee.monthly_fee,
+        discount: standaloneFee.discount || 0,
+      });
+      const joinDate = standaloneFee.effective_from || studentJoiningDate;
+      const status = financeService.autoPaymentStatus({ joinDate, monthlyFee: netMonthlyFee, totalPaid });
+      return {
+        urgency: status.urgency,
+        dueDate: status.paidThroughDate,
+        amountDue: status.balance,
+        joinDate,
+        studentJoiningDate,
+        monthlyFee: Number(standaloneFee.monthly_fee),
+        paid: status.paid,
+        owed: status.owed,
+        lastPaymentDate,
+      };
     }
+
     const netMonthlyFee = financeService.computePayable({
       baseFee: resolvedAllocation.monthly_fee,
       discount: resolvedAllocation.discount || 0,

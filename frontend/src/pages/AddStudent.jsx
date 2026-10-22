@@ -120,14 +120,14 @@ export default function AddStudent() {
       setError('Start and end time are required.');
       return;
     }
-    if (step === 6 && wantsAllocation) {
+    if (step === 6) {
       if (!monthlyFee) {
         setError('Monthly fee is required.');
         return;
       }
       setError('');
       setStep((s) => Math.min(s + 1, STEPS.length - 1));
-      checkOverlap();
+      if (wantsAllocation) checkOverlap();
       return;
     }
     setError('');
@@ -170,7 +170,6 @@ export default function AddStudent() {
           const fd = new FormData();
           fd.append('signature', signatureBlob, 'signature.png');
           await api.post(`/students/${res.data.student.student_id}/signature`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-          setSignatureSaved(true);
         } catch (err) {
           notes.push(`Signature upload failed: ${apiErrorMessage(err)}`);
         }
@@ -191,6 +190,19 @@ export default function AddStudent() {
           setAllocationResult(allocRes.data.allocation);
         } catch (err) {
           notes.push(`Seat allocation failed: ${apiErrorMessage(err)}`);
+        }
+      } else if (monthlyFee) {
+        // No seat — set the fee directly on the student so dues still
+        // accrue automatically from their joining date (see
+        // AllocationService.paymentStatusForStudent's standalone-fee path).
+        try {
+          await api.post(`/students/${res.data.student.student_id}/fee-plans`, {
+            monthlyFee: Number(monthlyFee),
+            discount: Number(discount || 0),
+            effectiveFrom: form.joiningDate,
+          });
+        } catch (err) {
+          notes.push(`Fee plan setup failed: ${apiErrorMessage(err)}`);
         }
       }
       setUploadNotes(notes);
@@ -243,6 +255,11 @@ export default function AddStudent() {
               <strong>Monthly fee:</strong> ₹{allocationResult.monthly_fee}
             </p>
           </>
+        )}
+        {!allocationResult && monthlyFee && (
+          <p>
+            <strong>Monthly fee:</strong> ₹{monthlyFee}/month (no seat — set directly on student)
+          </p>
         )}
         <p style={{ color: 'var(--color-ink-soft)', fontSize: 13 }}>
           Share this password with the student now — it will not be shown again.
@@ -443,20 +460,22 @@ export default function AddStudent() {
 
       {step === 6 && (
         <div>
-          {!wantsAllocation ? (
-            <p style={{ color: 'var(--color-ink-soft)' }}>No seat selected — a monthly fee isn't needed.</p>
-          ) : (
-            <div style={{ display: 'flex', gap: 12 }}>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Monthly fee (₹) *</label>
-                <input className="input" type="number" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} />
-              </div>
-              <div className="field" style={{ flex: 1 }}>
-                <label>Discount (₹)</label>
-                <input className="input" type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
-              </div>
-            </div>
+          {!wantsAllocation && (
+            <p style={{ color: 'var(--color-ink-soft)', fontSize: 13, marginTop: 0 }}>
+              No seat selected — this fee is set directly on the student (e.g. a reading-room-only member) and dues will
+              still accrue automatically from their joining date.
+            </p>
           )}
+          <div style={{ display: 'flex', gap: 12 }}>
+            <div className="field" style={{ flex: 1 }}>
+              <label>Monthly fee (₹) *</label>
+              <input className="input" type="number" value={monthlyFee} onChange={(e) => setMonthlyFee(e.target.value)} />
+            </div>
+            <div className="field" style={{ flex: 1 }}>
+              <label>Discount (₹)</label>
+              <input className="input" type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} />
+            </div>
+          </div>
         </div>
       )}
 
@@ -487,7 +506,7 @@ export default function AddStudent() {
           ) : (
             <div className="list-item">
               <span style={{ color: 'var(--color-ink-soft)' }}>Seat allocation</span>
-              <span>Skipped — allocate later from the seat map</span>
+              <span>Skipped — allocate later from the seat map{monthlyFee ? `; fee set to ₹${monthlyFee}/month` : ''}</span>
             </div>
           )}
 
