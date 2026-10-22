@@ -28,27 +28,53 @@ export const FIELD_DEFS = [
   { token: 'libraryName', label: 'Library name' },
   { token: 'libraryAddress', label: 'Library address' },
   { token: 'libraryPhone', label: 'Library phone' },
+  { token: 'dueLine', label: 'Due status sentence (English)' },
+  { token: 'dueLineHi', label: 'Due status sentence (Hindi)' },
+  { token: 'libraryAddressLine', label: 'Library address line (English, blank if not set)' },
+  { token: 'libraryAddressLineHi', label: 'Library address line (Hindi, blank if not set)' },
+  { token: 'libraryPhoneLine', label: 'Library phone line (English, blank if not set)' },
+  { token: 'libraryPhoneLineHi', label: 'Library phone line (Hindi, blank if not set)' },
+  { token: 'seatHi', label: 'Seat (Hindi fallback wording)' },
+  { token: 'lastPaymentHi', label: 'Last payment (Hindi fallback wording)' },
+  { token: 'libraryNameSubject', label: 'Library name (email subject fallback wording)' },
 ];
 
-const DEFAULT_WHATSAPP_SMS_TEMPLATE = `Hi {{studentName}}, this is a reminder from {{libraryName}} — your due amount is ₹{{dueAmount}}, due by {{dueDate}}.
+// This is exactly the message every reminder sent before templates became
+// customizable — the admin's very first "Payment reminder templates" view
+// in Settings must show this, not an approximation, so nothing changes in
+// what gets sent until they actually choose to edit it. dueLine/dueLineHi
+// carry the old code's whole conditional sentence (different wording
+// depending on whether anything is owed) since a single {{token}} can't
+// express a conditional — libraryAddress/libraryPhone's old leading-newline
+// formatting is reproduced the same way, folded into the surrounding text
+// rather than left as separate tokens.
+const DEFAULT_WHATSAPP_SMS_TEMPLATE = `Hi {{studentName}}, this is a reminder from {{libraryName}} — {{dueLine}}
 
 Student ID: {{studentId}}
+Joining date: {{joiningDate}}
 Seat: {{seat}}
 Last payment: {{lastPayment}}
+{{libraryName}}{{libraryAddressLine}}{{libraryPhoneLine}}
 
 Please clear your dues at your earliest convenience. Thank you!
 
 ---
 
-नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — आपकी बकाया राशि ₹{{dueAmount}} है, जिसे {{dueDate}} तक जमा करना है।
+नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — {{dueLineHi}}
 
 स्टूडेंट आईडी: {{studentId}}
-सीट: {{seat}}
-पिछला भुगतान: {{lastPayment}}
+जॉइनिंग तिथि: {{joiningDate}}
+सीट: {{seatHi}}
+पिछला भुगतान: {{lastPaymentHi}}
+{{libraryName}}{{libraryAddressLineHi}}{{libraryPhoneLineHi}}
 
 कृपया जल्द से जल्द अपना भुगतान करें। धन्यवाद!`;
 
-const DEFAULT_EMAIL_SUBJECT = 'Payment Reminder from {{libraryName}} / भुगतान रिमाइंडर';
+// Old openEmailReminder used a different fallback ('Library') here than
+// the message body's libName ('the library') — preserved via its own
+// token rather than silently unifying the two and changing behavior for
+// a library with no name set in Settings.
+const DEFAULT_EMAIL_SUBJECT = 'Payment Reminder from {{libraryNameSubject}} / भुगतान रिमाइंडर';
 const DEFAULT_EMAIL_BODY = DEFAULT_WHATSAPP_SMS_TEMPLATE;
 
 export const DEFAULT_TEMPLATES = {
@@ -71,12 +97,25 @@ function fieldValues(info) {
     email: email || '',
     joiningDate: joiningDate ? formatDate(joiningDate) : '—',
     seat: seatLabel || 'Not allocated',
+    seatHi: seatLabel || 'कोई सीट आवंटित नहीं',
     lastPayment: lastPaymentText || 'No payment recorded yet',
+    lastPaymentHi: lastPaymentText || 'अभी तक कोई भुगतान नहीं हुआ',
     dueAmount: balance > 0 ? String(balance) : '0',
     dueDate: dueDate ? formatDate(dueDate) : '—',
     libraryName: libraryName || 'the library',
+    libraryNameSubject: libraryName || 'Library',
     libraryAddress: libraryAddress || '',
     libraryPhone: libraryPhone || '',
+    dueLine: balance > 0
+      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}.`
+      : 'you have no pending dues at the moment.',
+    dueLineHi: balance > 0
+      ? `आपकी बकाया राशि ₹${balance} है${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना है` : ''}।`
+      : 'आपकी कोई बकाया राशि नहीं है।',
+    libraryAddressLine: libraryAddress ? `\nAddress: ${libraryAddress}` : '',
+    libraryPhoneLine: libraryPhone ? `\nPhone: ${libraryPhone}` : '',
+    libraryAddressLineHi: libraryAddress ? `\nपता: ${libraryAddress}` : '',
+    libraryPhoneLineHi: libraryPhone ? `\nफोन: ${libraryPhone}` : '',
   };
 }
 
