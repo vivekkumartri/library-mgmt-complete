@@ -26,6 +26,12 @@ module.exports = {
     jwtSecret: required('JWT_SECRET', 'dev-only-insecure-secret'),
     jwtExpiresIn: process.env.JWT_EXPIRES_IN || '8h',
     sessionSecret: required('SESSION_SECRET', 'dev-only-insecure-secret'),
+    // Long-lived opaque refresh token (not a JWT — stored hashed, looked
+    // up server-side, and individually revocable) used by the mobile
+    // app's biometric unlock to silently mint a new short-lived JWT
+    // without asking for a password again. Days, not a jsonwebtoken
+    // duration string.
+    refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS) || 30,
   },
 
   backup: {

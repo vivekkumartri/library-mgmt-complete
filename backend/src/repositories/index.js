@@ -20,6 +20,7 @@ const repos = {
   receipts: new BaseRepository('Receipts', 'receipt_id'),
   auditLog: new BaseRepository('Audit_Log', 'log_id'),
   settings: new BaseRepository('Settings', 'key'),
+  refreshTokens: new BaseRepository('Refresh_Tokens', 'token_id'),
 };
 
 /**

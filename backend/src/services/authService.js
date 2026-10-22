@@ -1,5 +1,6 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const env = require('../config/env');
 const repos = require('../repositories');
 const { AppError } = require('../utils/AppError');
@@ -7,6 +8,14 @@ const { uuid, nextSequentialId } = require('../utils/id');
 const auditService = require('./auditService');
 
 const SALT_ROUNDS = 12;
+
+function hashRefreshToken(token) {
+  return crypto.createHash('sha256').update(token).digest('hex');
+}
+
+function randomRefreshToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
 
 function randomPassword(length = 8) {
   const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no ambiguous chars
@@ -33,7 +42,73 @@ class AuthService {
     return jwt.verify(token, env.auth.jwtSecret);
   }
 
-  async adminLogin(email, password) {
+  /**
+   * Issues a new opaque refresh token for an already-authenticated login
+   * (called right after adminLogin/studentLogin). Stored only as a hash —
+   * same reasoning as password_hash — so a Refresh_Tokens sheet leak
+   * doesn't hand out usable tokens.
+   */
+  async issueRefreshToken({ ownerType, ownerId, device }) {
+    const token = randomRefreshToken();
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + env.auth.refreshTokenDays * 24 * 60 * 60 * 1000);
+    await repos.refreshTokens.create({
+      token_id: uuid(),
+      token_hash: hashRefreshToken(token),
+      owner_type: ownerType,
+      owner_id: ownerId,
+      device: device || '',
+      status: 'active',
+      created_at: now.toISOString(),
+      expires_at: expiresAt.toISOString(),
+      last_used_at: '',
+    });
+    return token;
+  }
+
+  /**
+   * Exchanges a still-valid refresh token for a new short-lived JWT,
+   * rotating the refresh token itself (the old row is revoked, a new one
+   * issued) so a token that leaks has a limited window before its next
+   * legitimate use invalidates it.
+   */
+  async refresh(rawToken, device) {
+    if (!rawToken) throw new AppError('INVALID_REFRESH_TOKEN', 'Refresh token is required.', 401);
+    const tokenHash = hashRefreshToken(rawToken);
+    const matches = await repos.refreshTokens.findAll(
+      (r) => r.token_hash === tokenHash && r.status === 'active'
+    );
+    const record = matches[0];
+    if (!record || new Date(record.expires_at) < new Date()) {
+      throw new AppError('INVALID_REFRESH_TOKEN', 'This session has expired. Please log in again.', 401);
+    }
+
+    let user;
+    if (record.owner_type === 'admin') {
+      const admin = await repos.admins.findById(record.owner_id);
+      if (!admin || admin.status !== 'active') throw new AppError('INVALID_REFRESH_TOKEN', 'Account no longer active.', 401);
+      const token = this.issueToken({ sub: admin.admin_id, type: 'admin', role: admin.role, name: admin.name });
+      user = { token, user: { id: admin.admin_id, name: admin.name, email: admin.email, role: admin.role, permissions: safeParsePermissions(admin.permissions_json) } };
+    } else {
+      const student = await repos.students.findById(record.owner_id);
+      if (!student || student.status === 'deactivated') throw new AppError('INVALID_REFRESH_TOKEN', 'Account no longer active.', 401);
+      const token = this.issueToken({ sub: student.student_id, type: 'student', name: student.full_name });
+      user = { token, user: { id: student.student_id, name: student.full_name, mustResetPassword: student.must_reset_password === 'true' } };
+    }
+
+    await repos.refreshTokens.update(record.token_id, { status: 'revoked' });
+    const newRefreshToken = await this.issueRefreshToken({ ownerType: record.owner_type, ownerId: record.owner_id, device: device || record.device });
+    return { ...user, refreshToken: newRefreshToken };
+  }
+
+  async revokeRefreshToken(rawToken) {
+    if (!rawToken) return;
+    const tokenHash = hashRefreshToken(rawToken);
+    const matches = await repos.refreshTokens.findAll((r) => r.token_hash === tokenHash && r.status === 'active');
+    if (matches[0]) await repos.refreshTokens.update(matches[0].token_id, { status: 'revoked' });
+  }
+
+  async adminLogin(email, password, { wantsRefreshToken = false, device = '' } = {}) {
     // Email match is case/whitespace-insensitive — a mobile keyboard
     // auto-capitalizing the first letter, or a stray trailing space,
     // shouldn't turn a correct password into "invalid credentials".
@@ -53,7 +128,7 @@ class AuthService {
       role: admin.role,
       name: admin.name,
     });
-    return {
+    const result = {
       token,
       user: {
         id: admin.admin_id,
@@ -63,16 +138,23 @@ class AuthService {
         permissions: safeParsePermissions(admin.permissions_json),
       },
     };
+    // Opt-in only — a refresh token is a long-lived credential, so it's
+    // only issued when the caller explicitly wants one (the mobile app's
+    // biometric-unlock flow), not on every ordinary web login.
+    if (wantsRefreshToken) {
+      result.refreshToken = await this.issueRefreshToken({ ownerType: 'admin', ownerId: admin.admin_id, device });
+    }
+    return result;
   }
 
-  async studentLogin(studentId, password) {
+  async studentLogin(studentId, password, { wantsRefreshToken = false, device = '' } = {}) {
     const student = await repos.students.findById(studentId);
     const ok = student ? await this.verifyPassword(password, student.password_hash) : false;
     if (!student || !ok || student.status === 'deactivated') {
       throw new AppError('INVALID_CREDENTIALS', 'Invalid student ID or password.', 401);
     }
     const token = this.issueToken({ sub: student.student_id, type: 'student', name: student.full_name });
-    return {
+    const result = {
       token,
       user: {
         id: student.student_id,
@@ -80,6 +162,10 @@ class AuthService {
         mustResetPassword: student.must_reset_password === 'true',
       },
     };
+    if (wantsRefreshToken) {
+      result.refreshToken = await this.issueRefreshToken({ ownerType: 'student', ownerId: student.student_id, device });
+    }
+    return result;
   }
 
   /**

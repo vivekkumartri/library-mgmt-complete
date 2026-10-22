@@ -8,6 +8,8 @@
 	<string>Used to capture student photos and signatures.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Used to let you pick an existing photo when uploading instead of capturing with the camera.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>Used to unlock the app without typing your password.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>

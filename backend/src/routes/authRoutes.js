@@ -9,8 +9,17 @@ const auditService = require('../services/auditService');
 
 const router = express.Router();
 
-const adminLoginSchema = z.object({ email: z.string().trim().email(), password: z.string().min(1) });
-const studentLoginSchema = z.object({ studentId: z.string().min(1), password: z.string().min(1) });
+const adminLoginSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+  wantsRefreshToken: z.boolean().optional(),
+});
+const studentLoginSchema = z.object({
+  studentId: z.string().min(1),
+  password: z.string().min(1),
+  wantsRefreshToken: z.boolean().optional(),
+});
+const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 
 function requestMeta(req) {
   return { ip: req.ip || '', device: req.headers['user-agent'] || '' };
@@ -20,10 +29,10 @@ router.post(
   '/admin/login',
   loginLimiter,
   asyncHandler(async (req, res) => {
-    const { email, password } = adminLoginSchema.parse(req.body);
+    const { email, password, wantsRefreshToken } = adminLoginSchema.parse(req.body);
     const { ip, device } = requestMeta(req);
     try {
-      const result = await authService.adminLogin(email, password);
+      const result = await authService.adminLogin(email, password, { wantsRefreshToken, device });
       await auditService.log({ actor: result.user, action: 'admin_login_succeeded', entity: 'Admins', entityId: result.user.id, ip, device });
       res.json(result);
     } catch (err) {
@@ -37,10 +46,10 @@ router.post(
   '/student/login',
   loginLimiter,
   asyncHandler(async (req, res) => {
-    const { studentId, password } = studentLoginSchema.parse(req.body);
+    const { studentId, password, wantsRefreshToken } = studentLoginSchema.parse(req.body);
     const { ip, device } = requestMeta(req);
     try {
-      const result = await authService.studentLogin(studentId, password);
+      const result = await authService.studentLogin(studentId, password, { wantsRefreshToken, device });
       await auditService.log({ actor: result.user, action: 'student_login_succeeded', entity: 'Students', entityId: result.user.id, ip, device });
       res.json(result);
     } catch (err) {
@@ -71,11 +80,26 @@ router.post(
   })
 );
 
-router.post('/logout', (req, res) => {
-  // Stateless JWT — logout is a client-side token discard. Endpoint exists
-  // for a consistent API surface and future server-side session revocation.
+router.post('/logout', asyncHandler(async (req, res) => {
+  // The short-lived JWT itself is still stateless (discarded client-side),
+  // but a refresh token is a real stored credential — revoke it so a
+  // device that's been logged out can't silently mint new JWTs via
+  // /auth/refresh after the fact.
+  const { refreshToken } = req.body || {};
+  if (refreshToken) await authService.revokeRefreshToken(refreshToken);
   res.json({ success: true });
-});
+}));
+
+router.post(
+  '/refresh',
+  loginLimiter,
+  asyncHandler(async (req, res) => {
+    const { refreshToken } = refreshSchema.parse(req.body);
+    const { device } = requestMeta(req);
+    const result = await authService.refresh(refreshToken, device);
+    res.json(result);
+  })
+);
 
 router.get(
   '/me',

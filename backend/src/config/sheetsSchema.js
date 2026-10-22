@@ -132,6 +132,19 @@ const SHEETS = {
     'log_id', 'actor_id', 'actor_name', 'action', 'entity', 'entity_id',
     'previous_value_json', 'new_value_json', 'timestamp', 'ip', 'device',
   ],
+
+  // Long-lived opaque tokens backing the mobile app's biometric unlock —
+  // only the sha256 hash is stored, never the raw token (same reasoning
+  // as password_hash). One row per issued token, not per user, so a
+  // single device/login can be revoked (logout) without signing every
+  // other device of that user out too; rotated (a fresh row + the old
+  // one's status flipped to 'revoked') on every successful /auth/refresh
+  // to limit how long a leaked token stays usable.
+  Refresh_Tokens: [
+    'token_id', 'token_hash', 'owner_type', 'owner_id', 'device',
+    'status', // active | revoked
+    'created_at', 'expires_at', 'last_used_at',
+  ],
 };
 
 module.exports = { SHEETS };
