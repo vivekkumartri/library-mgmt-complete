@@ -154,11 +154,54 @@ describe('Hindi due-line tense agrees with whether the due date is past or futur
     expect(message).not.toContain('थी');
   });
 
-  test('the English line is unaffected by tense either way (no grammatical ambiguity to fix there)', () => {
+  test('English has no tense distinction, only the added day-count (see the days-overdue describe() below)', () => {
     const future = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(10) }, {});
     const past = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-10) }, {});
     const dueLine = (msg) => msg.split('\n')[0];
     expect(dueLine(future)).toContain('your due amount is ₹500, due by');
+    expect(dueLine(future)).not.toContain('overdue');
     expect(dueLine(past)).toContain('your due amount is ₹500, due by');
+    expect(dueLine(past)).toContain('overdue');
+  });
+});
+
+describe('number of days overdue is included once a payment is actually overdue', () => {
+  const baseInfo = { fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', balance: 500 };
+
+  test('not yet due (future date) — no "overdue" wording', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(10) }, {});
+    expect(message).not.toContain('overdue');
+    expect(message).not.toContain('दिन से बकाया');
+  });
+
+  test('due today — not counted as overdue yet', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(0) }, {});
+    expect(message).not.toContain('overdue');
+  });
+
+  test('10 days overdue — English says "10 days overdue", Hindi says "10 दिन से बकाया"', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-10) }, {});
+    expect(message).toContain('(10 days overdue)');
+    expect(message).toContain('(10 दिन से बकाया)');
+  });
+
+  test('exactly 1 day overdue uses the singular "1 day overdue", not "1 days overdue"', () => {
+    const message = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-1) }, {});
+    expect(message).toContain('(1 day overdue)');
+    expect(message).not.toContain('1 days overdue');
+  });
+
+  test('zero balance never mentions days overdue, even with a long-past due date', () => {
+    const message = buildReminderMessage({ ...baseInfo, balance: 0, dueDate: isoDaysFromToday(-30) }, {});
+    expect(message).not.toContain('overdue');
+    expect(message).not.toContain('दिन से बकाया');
+  });
+
+  test('the {{daysOverdue}} token itself is directly insertable via a custom template', () => {
+    const templates = { [REMINDER_TEMPLATE_KEYS.whatsapp]: '{{daysOverdue}} days overdue for {{studentName}}' };
+    const overdue = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(-7) }, templates);
+    const notOverdue = buildReminderMessage({ ...baseInfo, dueDate: isoDaysFromToday(7) }, templates);
+    expect(overdue).toBe('7 days overdue for Rahul Kumar');
+    expect(notOverdue).toBe('0 days overdue for Rahul Kumar');
   });
 });

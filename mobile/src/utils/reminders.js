@@ -37,6 +37,7 @@ export const FIELD_DEFS = [
   { token: 'seatHi', label: 'Seat (Hindi fallback wording)' },
   { token: 'lastPaymentHi', label: 'Last payment (Hindi fallback wording)' },
   { token: 'libraryNameSubject', label: 'Library name (email subject fallback wording)' },
+  { token: 'daysOverdue', label: 'Days overdue (0 if not overdue)' },
 ];
 
 // This is exactly the message every reminder sent before templates became
@@ -97,6 +98,21 @@ function isPastDue(dueDate) {
   return dueDate.slice(0, 10) < todayStr;
 }
 
+/**
+ * Whole calendar days between `dueDate` and today, or 0 if not overdue
+ * (dueDate missing, or today/future). Both dates are read as UTC
+ * midnight so this isn't off by one depending on the caller's local
+ * timezone relative to the plain "YYYY-MM-DD" dueDate string.
+ */
+function daysOverdue(dueDate) {
+  if (!isPastDue(dueDate)) return 0;
+  const [y, m, d] = dueDate.slice(0, 10).split('-').map(Number);
+  const due = Date.UTC(y, m - 1, d);
+  const now = new Date();
+  const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());
+  return Math.round((today - due) / (1000 * 60 * 60 * 24));
+}
+
 /** Builds the {{token}} -> display-string map from an `info` object (see callers for its shape). */
 function fieldValues(info) {
   const {
@@ -119,15 +135,16 @@ function fieldValues(info) {
     libraryNameSubject: libraryName || 'Library',
     libraryAddress: libraryAddress || '',
     libraryPhone: libraryPhone || '',
+    daysOverdue: String(daysOverdue(dueDate)),
     dueLine: balance > 0
-      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}.`
+      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : ''}.`
       : 'you have no pending dues at the moment.',
     // Hindi needs tense agreement that English doesn't: a due date already
     // in the past reads naturally as "था" (was due), not "है" (is due) —
     // isPastDue compares calendar days only, so "due today" still gets the
     // present tense rather than being misread as already overdue.
     dueLineHi: balance > 0
-      ? `आपकी बकाया राशि ₹${balance} ${isPastDue(dueDate) ? 'थी' : 'है'}${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना ${isPastDue(dueDate) ? 'था' : 'है'}` : ''}।`
+      ? `आपकी बकाया राशि ₹${balance} ${isPastDue(dueDate) ? 'थी' : 'है'}${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना ${isPastDue(dueDate) ? 'था' : 'है'}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} दिन से बकाया)` : ''}।`
       : 'आपकी कोई बकाया राशि नहीं है।',
     libraryAddressLine: libraryAddress ? `\nAddress: ${libraryAddress}` : '',
     libraryPhoneLine: libraryPhone ? `\nPhone: ${libraryPhone}` : '',
