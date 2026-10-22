@@ -1,10 +1,15 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import '../i18n';
 import { StudentFees } from '../pages/StudentPortal';
 
+// A stable object reference, matching how the real AuthContext's `user`
+// (React state) stays referentially stable across re-renders when it
+// hasn't changed — a fresh literal returned on every call would make
+// `load`'s useCallback(..., [user]) re-identify every render and loop.
+const mockUser = { id: 'LIB-2026-0001', name: 'Rahul Kumar' };
 vi.mock('../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'LIB-2026-0001', name: 'Rahul Kumar' } }),
+  useAuth: () => ({ user: mockUser }),
 }));
 
 vi.mock('../services/api', () => {

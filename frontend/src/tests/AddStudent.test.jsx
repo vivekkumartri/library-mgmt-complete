@@ -44,13 +44,15 @@ function fillStep1Mobile() {
 }
 
 // Call once already on the Photo step (step 3). Advances through
-// Photo/Signature/Seat allocation/Timing/Monthly fee — all skippable when
-// seat allocation is left unchecked — landing on the Review & create step.
+// Photo/Signature/Seat allocation/Timing — all skippable when seat
+// allocation is left unchecked — then fills in the (always-required)
+// monthly fee before landing on the Review & create step.
 function skipToReview() {
   fireEvent.click(screen.getByText('Next')); // Photo -> Signature
   fireEvent.click(screen.getByText('Next')); // Signature -> Seat allocation
   fireEvent.click(screen.getByText('Next')); // Seat allocation -> Timing
   fireEvent.click(screen.getByText('Next')); // Timing -> Monthly fee
+  fireEvent.change(fieldInput('Monthly fee (₹) *'), { target: { value: '500' } });
   fireEvent.click(screen.getByText('Next')); // Monthly fee -> Review & create
 }
 

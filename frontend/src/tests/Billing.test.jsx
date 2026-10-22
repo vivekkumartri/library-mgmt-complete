@@ -97,7 +97,7 @@ describe('Billing page', () => {
       if (url === '/billing') return Promise.resolve({ data: { billing: [] } });
       if (url === '/students') return Promise.resolve({ data: { students: [student] } });
       if (url === `/students/${student.student_id}/payment-status`) {
-        return Promise.resolve({ data: { urgency: 'ok', paidThroughDate: null, joinDate: null, monthlyFee: null, paid: 0, owed: 0, balance: 0 } });
+        return Promise.resolve({ data: { urgency: 'ok', dueDate: null, joinDate: null, monthlyFee: null, paid: 0, owed: 0, balance: 0 } });
       }
       return Promise.resolve({ data: {} });
     });
@@ -112,6 +112,12 @@ describe('Billing page', () => {
     await userEvent.type(searchInput, 'Rahul');
     await waitFor(() => screen.getByText(/Rahul Kumar/i));
     fireEvent.click(screen.getByText(/Rahul Kumar/i));
+
+    // Wait for the payment-status lookup to resolve (it sets dateMode to
+    // manual here since monthlyFee is null) before touching the date
+    // inputs — otherwise the "To date" field can still be mid-render as
+    // the auto/read-only variant from the previous tick.
+    await waitFor(() => expect(screen.getByText(/enter the period manually/i)).toBeInTheDocument());
 
     // From date / To date are the two date inputs in this drawer.
     const [fromInput, toInput] = document.querySelectorAll('input[type="date"]');
@@ -147,7 +153,7 @@ describe('Billing page', () => {
       if (url === '/students') return Promise.resolve({ data: { students: [student] } });
       if (url === `/students/${student.student_id}/payment-status`) {
         return Promise.resolve({
-          data: { urgency: 'due_soon', paidThroughDate: '2026-09-01', joinDate: '2026-08-01', monthlyFee: 1000, paid: 1000, owed: 800, balance: 0 },
+          data: { urgency: 'due_soon', dueDate: '2026-09-01', joinDate: '2026-08-01', monthlyFee: 1000, paid: 1000, owed: 800, balance: 0 },
         });
       }
       return Promise.resolve({ data: {} });
@@ -174,7 +180,7 @@ describe('Billing page', () => {
       if (url === '/students') return Promise.resolve({ data: { students: [student] } });
       if (url === `/students/${student.student_id}/payment-status`) {
         return Promise.resolve({
-          data: { urgency: 'due_today', paidThroughDate: '2026-08-01', joinDate: '2026-08-01', monthlyFee: 1000, paid: 0, owed: 0, balance: 0 },
+          data: { urgency: 'due_today', dueDate: '2026-08-01', joinDate: '2026-08-01', monthlyFee: 1000, paid: 0, owed: 0, balance: 0 },
         });
       }
       return Promise.resolve({ data: {} });
@@ -189,13 +195,20 @@ describe('Billing page', () => {
     await waitFor(() => screen.getByText(/Rahul Kumar/i));
     fireEvent.click(screen.getByText(/Rahul Kumar/i));
 
-    await waitFor(() => expect(screen.getByText(/prefilled from their joining date/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/prefilled from joining date/i)).toBeInTheDocument());
     const [fromInput] = document.querySelectorAll('input[type="date"]');
     expect(fromInput.value).toBe('2026-08-01');
   });
 
   test('shows a friendly error and allows retry when loading billing fails', async () => {
-    api.get.mockRejectedValueOnce({ response: { data: { error: { message: 'Google Sheets unavailable' } } } });
+    // Billing also fires a non-blocking GET /settings on mount (for the
+    // payment-date-mode toggle) before loading /billing — target the
+    // rejection at /billing specifically so it isn't swallowed by that
+    // unrelated, separately-caught call instead.
+    api.get.mockImplementation((url) => {
+      if (url === '/billing') return Promise.reject({ response: { data: { error: { message: 'Google Sheets unavailable' } } } });
+      return Promise.resolve({ data: {} });
+    });
 
     render(<Billing />);
     await waitFor(() => expect(screen.getByText('Google Sheets unavailable')).toBeInTheDocument());

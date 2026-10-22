@@ -238,6 +238,11 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
       if (cancelled) return;
       const status = res.data;
       setAutoStatus(status);
+      // No fee on file (e.g. no allocation and no standalone fee plan set
+      // yet) means calcEndDate can never compute a "To date" — fall back
+      // to manual entry instead of leaving the field stuck read-only with
+      // nothing able to fill it.
+      if (!status.monthlyFee) setDateMode('manual');
       // Use studentJoiningDate (student record) for From date prefill, not
       // allocation start_date — they can differ if the seat was allocated
       // retroactively to the 1st of the month.
