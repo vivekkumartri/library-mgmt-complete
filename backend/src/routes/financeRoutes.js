@@ -71,7 +71,7 @@ router.post(
   requireAdmin,
   requirePermission('payments'),
   asyncHandler(async (req, res) => {
-    const { studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes } = req.body;
+    const { studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes, idempotencyKey } = req.body;
     if (!studentId || !amount || !paymentMethod) {
       throw new AppError('VALIDATION_ERROR', 'studentId, amount and paymentMethod are required.', 400);
     }
@@ -79,7 +79,7 @@ router.post(
       throw new AppError('VALIDATION_ERROR', 'Either billingId, or both periodStart and periodEnd, are required.', 400);
     }
     const payment = await paymentService.recordPayment(
-      { studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes },
+      { studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes, idempotencyKey },
       req.user
     );
     res.status(201).json({ payment });

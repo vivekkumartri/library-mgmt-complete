@@ -104,6 +104,12 @@ const SHEETS = {
     // billing_id stays '' for these so Monthly_Billing/report totals are
     // never polluted by non-month-shaped data.
     'period_start', 'period_end',
+    // Client-generated key (a UUID minted once when the payment was first
+    // queued, e.g. by the mobile app's offline sync — never regenerated
+    // on retry) that makes recordPayment() safe to call more than once
+    // for "the same" payment. Empty for payments recorded the normal
+    // online way, which have no retry risk to guard against.
+    'idempotency_key',
   ],
 
   Expenses: [

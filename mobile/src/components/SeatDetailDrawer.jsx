@@ -6,6 +6,7 @@ import AllocateForm from './AllocateForm';
 import EndAllocationDrawer from './EndAllocationDrawer';
 import { formatDate } from '../utils/formatDate';
 import { openWhatsappReminder, openSmsReminder, openEmailReminder } from '../utils/reminders';
+import { queueAction } from '../utils/offlineQueue';
 
 function StudentPhoto({ studentId }) {
   const [url, setUrl] = useState(null);
@@ -97,6 +98,19 @@ export default function SeatDetailDrawer({ seat, floor, onClose, onChanged }) {
     try {
       await api.post('/attendance', { studentId, date: TODAY, status });
     } catch (err) {
+      // Same reasoning as Attendance.jsx — no response at all means this
+      // never reached the server, so queue it rather than treating it as
+      // a real rejection; attendance marks are safe to retry since the
+      // backend dedupes by student+date.
+      if (!err?.response) {
+        queueAction({
+          kind: 'attendance',
+          url: '/attendance',
+          body: { studentId, date: TODAY, status },
+          label: `${status === 'present' ? 'Present' : 'Absent'} — ${studentId} (${TODAY})`,
+        });
+        return;
+      }
       setAttendanceMarks((m) => ({ ...m, [studentId]: previous }));
       setError(apiErrorMessage(err));
     } finally {

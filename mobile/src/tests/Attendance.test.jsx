@@ -11,8 +11,11 @@ vi.mock('../services/api', () => {
     apiErrorMessage: (err, fallback) => err?.response?.data?.error?.message || fallback,
   };
 });
+vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
+vi.mock('@capacitor/network', () => ({ Network: { getStatus: vi.fn(), addListener: vi.fn() } }));
 
 import api from '../services/api';
+import { getQueuedActions } from '../utils/offlineQueue';
 
 const student = { student_id: 'LIB-2026-0001', full_name: 'Rahul Kumar' };
 const summary = { present: 0, absent: 0, notMarked: 1, attendancePercentage: 0 };
@@ -28,6 +31,7 @@ function mockDefaultLoad({ attendance = [] } = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe('Attendance page', () => {
@@ -81,6 +85,26 @@ describe('Attendance page', () => {
     fireEvent.click(within(row).getByText('Present'));
 
     await waitFor(() => expect(screen.getByText('Could not save attendance.')).toBeInTheDocument());
+  });
+
+  test('queues the mark instead of reverting when the request never reaches the server (offline)', async () => {
+    mockDefaultLoad();
+    api.post.mockRejectedValueOnce(new Error('Network Error')); // no .response — genuinely offline
+
+    render(<Attendance />);
+    await waitFor(() => screen.getByText('Rahul Kumar'));
+    const row = screen.getByText('Rahul Kumar').closest('.list-item');
+
+    fireEvent.click(within(row).getByText('Present'));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    // The optimistic mark stays — it's queued, not reverted — and no error is shown.
+    expect(within(row).getByText('Present')).toHaveStyle({ background: 'var(--color-success)' });
+    expect(screen.queryByText(/error/i)).not.toBeInTheDocument();
+
+    const queue = getQueuedActions();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ kind: 'attendance', url: '/attendance', body: { studentId: student.student_id, status: 'present' } });
   });
 
   test('filters the student list by search', async () => {

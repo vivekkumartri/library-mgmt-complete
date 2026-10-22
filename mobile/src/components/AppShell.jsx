@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
+import SyncStatusBadge from './SyncStatusBadge';
 
 const ADMIN_NAV = [
   { to: '/', key: 'dashboard', icon: '\u25A6' },
@@ -71,7 +72,7 @@ export default function AppShell({ children }) {
 
       <main className="app-main">
         <div className="topbar">
-          <div />
+          <SyncStatusBadge />
           <div style={{ display: 'flex', gap: 8 }} className="show-mobile-only">
             <button className="btn btn-outline" onClick={toggleLang}>
               {i18n.language === 'en' ? 'हिं' : 'EN'}

@@ -26,9 +26,20 @@ class PaymentService {
    *    so month-based billing/report data is never polluted by a
    *    non-month-shaped record — billing_id is stored as '' for these.
    */
-  async recordPayment({ studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes }, actor) {
+  async recordPayment({ studentId, billingId, periodStart, periodEnd, amount, paymentMethod, referenceNumber, paymentDate, notes, idempotencyKey }, actor) {
     if (!['cash', 'upi'].includes(paymentMethod)) {
       throw new AppError('VALIDATION_ERROR', "Payment method must be 'cash' or 'upi'.", 400);
+    }
+
+    // A caller that can retry the same logical payment more than once —
+    // chiefly the mobile app's offline sync queue, where a dropped
+    // response after the write already succeeded would otherwise record
+    // the same payment twice — passes a stable idempotencyKey it minted
+    // once up front. If that key has already been used, return the
+    // existing payment instead of creating a second one.
+    if (idempotencyKey) {
+      const existing = await repos.payments.findAll((p) => p.idempotency_key === idempotencyKey);
+      if (existing[0]) return existing[0];
     }
 
     let billing = null;
@@ -64,6 +75,7 @@ class PaymentService {
       created_at: new Date().toISOString(),
       period_start: billing ? '' : periodStart,
       period_end: billing ? '' : periodEnd,
+      idempotency_key: idempotencyKey || '',
     };
     await repos.payments.create(record);
 

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import api, { apiErrorMessage } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
+import { queueAction } from '../utils/offlineQueue';
 
 export default function Attendance() {
   const { t } = useTranslation();
@@ -47,9 +48,24 @@ export default function Attendance() {
     try {
       await api.post('/attendance', { studentId, date, status });
     } catch (err) {
-      // Revert just this student's optimistic update rather than reloading
-      // the whole screen — a full load() here would also clear the error
-      // message we're about to set (load() clears error as its first line).
+      // No response at all means the request never reached the server —
+      // genuinely offline (or a dropped connection mid-request), not a
+      // real validation/auth failure. Queue it for later instead of
+      // reverting the optimistic mark: the backend already dedupes
+      // attendance by student+date (see attendanceRoutes.js), so a
+      // retried/queued mark is always safe to resend as-is.
+      if (!err?.response) {
+        queueAction({
+          kind: 'attendance',
+          url: '/attendance',
+          body: { studentId, date, status },
+          label: `${status === 'present' ? 'Present' : 'Absent'} — ${studentId} (${date})`,
+        });
+        return;
+      }
+      // A real server-side rejection (permission, validation) — this
+      // won't succeed on retry, so revert the optimistic update instead
+      // of silently queueing something that will just fail again.
       setAttendance((a) => ({ ...a, [studentId]: previous }));
       setMarkedAt((m) => ({ ...m, [studentId]: previousMarkedAt }));
       setError(apiErrorMessage(err));

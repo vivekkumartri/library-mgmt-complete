@@ -14,7 +14,11 @@ vi.mock('../services/api', () => {
   };
 });
 
+vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
+vi.mock('@capacitor/network', () => ({ Network: { getStatus: vi.fn(), addListener: vi.fn() } }));
+
 import api from '../services/api';
+import { getQueuedActions } from '../utils/offlineQueue';
 
 const seat = {
   seat_id: 'seat-1',
@@ -40,6 +44,7 @@ function renderDrawer(props = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe('SeatDetailDrawer — mark attendance from the seat map', () => {
@@ -67,6 +72,20 @@ describe('SeatDetailDrawer — mark attendance from the seat map', () => {
     fireEvent.click(absentButtons[0]);
 
     await waitFor(() => expect(screen.getByText('Network error')).toBeInTheDocument());
+  });
+
+  test('queues the mark when offline instead of reverting or showing an error', async () => {
+    api.post.mockRejectedValueOnce(new Error('Network Error'));
+    renderDrawer();
+
+    const presentButtons = screen.getAllByText('Present');
+    fireEvent.click(presentButtons[0]);
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledTimes(1));
+    expect(screen.queryByText(/network error/i)).not.toBeInTheDocument();
+    const queue = getQueuedActions();
+    expect(queue).toHaveLength(1);
+    expect(queue[0]).toMatchObject({ kind: 'attendance', url: '/attendance', body: { studentId: 'LIB-2026-0001', status: 'present' } });
   });
 });
 

@@ -4,6 +4,30 @@ import api, { apiErrorMessage, openReceipt } from '../services/api';
 import { Loading, ErrorState, EmptyState } from '../components/AsyncState';
 import StudentSearchPicker from '../components/StudentSearchPicker';
 import { formatDate } from '../utils/formatDate';
+import { queueAction } from '../utils/offlineQueue';
+
+function randomId() {
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+/** Shown when a payment couldn't reach the server (offline) and was
+ * queued for later sync instead — no receipt exists yet, so this is
+ * deliberately distinct from ReceiptReadyPanel rather than faking one. */
+function QueuedPaymentPanel({ amount, onDone }) {
+  return (
+    <div>
+      <h3>Payment queued</h3>
+      <p style={{ color: 'var(--color-ink-soft)' }}>
+        You're offline — this ₹{amount} payment is saved on this device and will sync automatically once you're back
+        online. The receipt will be available after it syncs.
+      </p>
+      <button className="btn btn-primary" style={{ marginTop: 12 }} onClick={onDone}>
+        Done
+      </button>
+    </div>
+  );
+}
 
 /** Shown after a payment is successfully recorded, in place of the form,
  * so the receipt is one click away instead of requiring a trip to the
@@ -139,20 +163,32 @@ function RecordPaymentDrawer({ billing, onClose, onDone }) {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [recorded, setRecorded] = useState(null);
+  const [queued, setQueued] = useState(false);
 
   async function submit() {
     setBusy(true);
     setError('');
+    const payload = {
+      studentId: billing.student_id,
+      billingId: billing.billing_id,
+      amount: Number(amount),
+      paymentMethod: method,
+      referenceNumber: reference,
+      idempotencyKey: `payment-${randomId()}`,
+    };
     try {
-      const res = await api.post('/payments', {
-        studentId: billing.student_id,
-        billingId: billing.billing_id,
-        amount: Number(amount),
-        paymentMethod: method,
-        referenceNumber: reference,
-      });
+      const res = await api.post('/payments', payload);
       setRecorded(res.data.payment);
     } catch (err) {
+      // No response at all means this never reached the server — queue
+      // it for later sync instead of showing an error. The idempotency
+      // key above makes the eventual retry safe even if this attempt
+      // actually did land server-side and only the response was lost.
+      if (!err?.response) {
+        queueAction({ kind: 'payment', url: '/payments', body: payload, label: `Payment ₹${payload.amount} — ${billing.student_id}` });
+        setQueued(true);
+        return;
+      }
       setError(err?.response?.data?.error?.message || 'Unable to record payment.');
     } finally {
       setBusy(false);
@@ -162,7 +198,9 @@ function RecordPaymentDrawer({ billing, onClose, onDone }) {
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        {recorded ? (
+        {queued ? (
+          <QueuedPaymentPanel amount={amount} onDone={onDone} />
+        ) : recorded ? (
           <ReceiptReadyPanel payment={recorded} onDone={onDone} />
         ) : (
           <>
@@ -220,6 +258,7 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [recorded, setRecorded] = useState(null);
+  const [queued, setQueued] = useState(false);
   const [autoStatus, setAutoStatus] = useState(null);
   const [statusNotice, setStatusNotice] = useState('');
   const [dateMode, setDateMode] = useState(defaultDateMode);
@@ -315,18 +354,25 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
     }
     setBusy(true);
     setError('');
+    const payload = {
+      studentId: student.student_id,
+      periodStart,
+      periodEnd,
+      amount: Number(amount),
+      paymentMethod: method,
+      referenceNumber: reference,
+      notes,
+      idempotencyKey: `payment-${randomId()}`,
+    };
     try {
-      const res = await api.post('/payments', {
-        studentId: student.student_id,
-        periodStart,
-        periodEnd,
-        amount: Number(amount),
-        paymentMethod: method,
-        referenceNumber: reference,
-        notes,
-      });
+      const res = await api.post('/payments', payload);
       setRecorded(res.data.payment);
     } catch (err) {
+      if (!err?.response) {
+        queueAction({ kind: 'payment', url: '/payments', body: payload, label: `Payment ₹${payload.amount} — ${student.student_id}` });
+        setQueued(true);
+        return;
+      }
       setError(err?.response?.data?.error?.message || 'Unable to record payment.');
     } finally {
       setBusy(false);
@@ -336,7 +382,9 @@ function RecordRangePaymentDrawer({ onClose, onDone, defaultDateMode = 'auto' })
   return (
     <div className="drawer-backdrop" onClick={onClose}>
       <div className="drawer" onClick={(e) => e.stopPropagation()}>
-        {recorded ? (
+        {queued ? (
+          <QueuedPaymentPanel amount={amount} onDone={onDone} />
+        ) : recorded ? (
           <ReceiptReadyPanel payment={recorded} onDone={onDone} />
         ) : (
           <>

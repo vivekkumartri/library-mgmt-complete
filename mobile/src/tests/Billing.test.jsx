@@ -14,7 +14,11 @@ vi.mock('../services/api', () => {
   };
 });
 
+vi.mock('@capacitor/core', () => ({ Capacitor: { isNativePlatform: () => false } }));
+vi.mock('@capacitor/network', () => ({ Network: { getStatus: vi.fn(), addListener: vi.fn() } }));
+
 import api from '../services/api';
+import { getQueuedActions } from '../utils/offlineQueue';
 
 const student = { student_id: 'LIB-2026-0001', full_name: 'Rahul Kumar', mobile: '9999999999' };
 const billingRow = {
@@ -30,6 +34,7 @@ const billingRow = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  localStorage.clear();
 });
 
 describe('Billing page', () => {
@@ -90,6 +95,31 @@ describe('Billing page', () => {
 
     fireEvent.click(screen.getByText('Done'));
     await waitFor(() => expect(screen.queryByText('Payment recorded')).not.toBeInTheDocument());
+  });
+
+  test('queues the payment for later sync when offline, with an idempotency key, instead of showing an error', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/billing') return Promise.resolve({ data: { billing: [billingRow] } });
+      if (url === `/students/${student.student_id}`) return Promise.resolve({ data: { student } });
+      return Promise.resolve({ data: {} });
+    });
+    api.post.mockRejectedValueOnce(new Error('Network Error')); // no .response — genuinely offline
+
+    render(<Billing />);
+    await waitFor(() => expect(screen.getByText('Rahul Kumar')).toBeInTheDocument());
+
+    fireEvent.click(screen.getByText('Record payment'));
+    const submitButtons = screen.getAllByText('Record payment');
+    fireEvent.click(submitButtons[submitButtons.length - 1]);
+
+    await waitFor(() => expect(screen.getByText('Payment queued')).toBeInTheDocument());
+    expect(screen.queryByText('Payment recorded')).not.toBeInTheDocument();
+
+    const queue = getQueuedActions();
+    expect(queue).toHaveLength(1);
+    expect(queue[0].url).toBe('/payments');
+    expect(queue[0].body).toMatchObject({ studentId: student.student_id, billingId: 'b1', amount: 1000 });
+    expect(queue[0].body.idempotencyKey).toMatch(/^payment-/);
   });
 
   test('records a date-range payment with no billingId, offering the receipt afterward', async () => {

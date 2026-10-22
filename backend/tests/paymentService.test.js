@@ -173,3 +173,40 @@ describe('paymentService.voidPayment', () => {
     await expect(paymentService.voidPayment(payment.payment_id, 'Again', ACTOR)).rejects.toThrow(/already/i);
   });
 });
+
+describe('paymentService.recordPayment — idempotency key', () => {
+  beforeEach(() => {
+    resetStore();
+    jest.clearAllMocks();
+  });
+
+  test('a repeated call with the same idempotencyKey returns the original payment instead of creating a second one', async () => {
+    const input = { studentId: 'LIB-2026-0001', billingId: 'b1', amount: 500, paymentMethod: 'cash', idempotencyKey: 'queued-offline-1' };
+    const first = await paymentService.recordPayment(input, ACTOR);
+    const second = await paymentService.recordPayment(input, ACTOR);
+
+    expect(second.payment_id).toBe(first.payment_id);
+    expect(repos.__store.Payments).toHaveLength(1);
+    // The billing paid total must reflect one payment, not two, despite
+    // the duplicate call — this is exactly the double-charge the key
+    // guards against (e.g. a dropped response after an offline sync
+    // retries the same queued write).
+    expect(repos.__store.Monthly_Billing[0].paid).toBe(500);
+  });
+
+  test('two different idempotency keys create two separate payments as normal', async () => {
+    await paymentService.recordPayment({ studentId: 'LIB-2026-0001', billingId: 'b1', amount: 300, paymentMethod: 'cash', idempotencyKey: 'key-a' }, ACTOR);
+    await paymentService.recordPayment({ studentId: 'LIB-2026-0001', billingId: 'b1', amount: 300, paymentMethod: 'cash', idempotencyKey: 'key-b' }, ACTOR);
+
+    expect(repos.__store.Payments).toHaveLength(2);
+    expect(repos.__store.Monthly_Billing[0].paid).toBe(600);
+  });
+
+  test('omitting idempotencyKey behaves exactly as before (no dedup applied)', async () => {
+    const input = { studentId: 'LIB-2026-0001', billingId: 'b1', amount: 500, paymentMethod: 'cash' };
+    await paymentService.recordPayment(input, ACTOR);
+    await paymentService.recordPayment(input, ACTOR);
+
+    expect(repos.__store.Payments).toHaveLength(2);
+  });
+});
