@@ -7,12 +7,26 @@ import { formatDate } from './formatDate';
  * source of truth both for what Settings' "+ Add field" picker offers and
  * for what fillTemplate() actually substitutes, so a token can never be
  * typo'd into existence — it only ever gets there via the picker.
+ *
+ * Each channel has two separate templates — "pending" (balance > 0) and
+ * "paidUp" (balance === 0) — picked at send time by balance, rather than
+ * one template with a single computed sentence that silently branches
+ * inside JS. A plain {{token}} substitution can't express "say X if
+ * balance > 0, otherwise say Y" on its own, so forcing that into one
+ * template either means keeping an opaque pre-computed sentence (not
+ * really editable) or admins seeing "due ₹0" nonsense once paid up —
+ * two full templates lets the admin write genuinely different wording
+ * for each case.
  */
 export const REMINDER_TEMPLATE_KEYS = {
-  whatsapp: 'reminder_template_whatsapp',
-  sms: 'reminder_template_sms',
-  emailSubject: 'reminder_template_email_subject',
-  emailBody: 'reminder_template_email_body',
+  whatsappPending: 'reminder_template_whatsapp_pending',
+  whatsappPaidUp: 'reminder_template_whatsapp_paidup',
+  smsPending: 'reminder_template_sms_pending',
+  smsPaidUp: 'reminder_template_sms_paidup',
+  emailSubjectPending: 'reminder_template_email_subject_pending',
+  emailSubjectPaidUp: 'reminder_template_email_subject_paidup',
+  emailBodyPending: 'reminder_template_email_body_pending',
+  emailBodyPaidUp: 'reminder_template_email_body_paidup',
 };
 
 export const FIELD_DEFS = [
@@ -25,17 +39,15 @@ export const FIELD_DEFS = [
   { token: 'lastPayment', label: 'Last payment' },
   { token: 'dueAmount', label: 'Due amount (₹)' },
   { token: 'dueDate', label: 'Due date' },
+  { token: 'daysOverdue', label: 'Days overdue (0 if not overdue)' },
+  { token: 'dueVerb', label: 'Due status — "is"/"was" (English)' },
+  { token: 'dueVerbHi', label: 'Due status — "है"/"था" (Hindi, used with जमा करना)' },
+  { token: 'dueVerbHiFem', label: 'Due status — "है"/"थी" (Hindi, used with राशि)' },
+  { token: 'overdueSuffix', label: 'Due status — "(N days overdue)" suffix (English, blank if not overdue)' },
+  { token: 'overdueSuffixHi', label: 'Due status — "(N दिन से बकाया)" suffix (Hindi, blank if not overdue)' },
   { token: 'libraryName', label: 'Library name' },
   { token: 'libraryAddress', label: 'Library address' },
   { token: 'libraryPhone', label: 'Library phone' },
-  { token: 'dueLine', label: 'Due status — full sentence (English)' },
-  { token: 'dueLineHi', label: 'Due status — full sentence (Hindi)' },
-  { token: 'dueVerb', label: 'Due status — "is"/"was" (English)' },
-  { token: 'dueVerbHi', label: 'Due status — "है"/"था" (Hindi)' },
-  { token: 'noDuesLine', label: 'Due status — "no dues owed" wording (English)' },
-  { token: 'noDuesLineHi', label: 'Due status — "no dues owed" wording (Hindi)' },
-  { token: 'overdueSuffix', label: 'Due status — "(N days overdue)" suffix (English, blank if not overdue)' },
-  { token: 'overdueSuffixHi', label: 'Due status — "(N दिन से बकाया)" suffix (Hindi, blank if not overdue)' },
   { token: 'libraryAddressLine', label: 'Library address line (English, blank if not set)' },
   { token: 'libraryAddressLineHi', label: 'Library address line (Hindi, blank if not set)' },
   { token: 'libraryPhoneLine', label: 'Library phone line (English, blank if not set)' },
@@ -43,19 +55,14 @@ export const FIELD_DEFS = [
   { token: 'seatHi', label: 'Seat (Hindi fallback wording)' },
   { token: 'lastPaymentHi', label: 'Last payment (Hindi fallback wording)' },
   { token: 'libraryNameSubject', label: 'Library name (email subject fallback wording)' },
-  { token: 'daysOverdue', label: 'Days overdue (0 if not overdue)' },
 ];
 
-// This is exactly the message every reminder sent before templates became
-// customizable — the admin's very first "Payment reminder templates" view
-// in Settings must show this, not an approximation, so nothing changes in
-// what gets sent until they actually choose to edit it. dueLine/dueLineHi
-// carry the old code's whole conditional sentence (different wording
-// depending on whether anything is owed) since a single {{token}} can't
-// express a conditional — libraryAddress/libraryPhone's old leading-newline
-// formatting is reproduced the same way, folded into the surrounding text
-// rather than left as separate tokens.
-const DEFAULT_WHATSAPP_SMS_TEMPLATE = `Hi {{studentName}}, this is a reminder from {{libraryName}} — {{dueLine}}
+// Defaults reproduce the exact message every reminder sent before
+// templates became customizable and per-status — an admin who never
+// touches Settings must see the same wording as before, just now sourced
+// from two templates (picked by balance) instead of one with a baked-in
+// conditional. See reminders.defaultEquivalence.test.js.
+const DEFAULT_WHATSAPP_SMS_PENDING = `Hi {{studentName}}, this is a reminder from {{libraryName}} — your due amount is ₹{{dueAmount}}, due by {{dueDate}}{{overdueSuffix}}.
 
 Student ID: {{studentId}}
 Joining date: {{joiningDate}}
@@ -67,7 +74,29 @@ Please clear your dues at your earliest convenience. Thank you!
 
 ---
 
-नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — {{dueLineHi}}
+नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — आपकी बकाया राशि ₹{{dueAmount}} {{dueVerbHiFem}}, जिसे {{dueDate}} तक जमा करना {{dueVerbHi}}{{overdueSuffixHi}}।
+
+स्टूडेंट आईडी: {{studentId}}
+जॉइनिंग तिथि: {{joiningDate}}
+सीट: {{seatHi}}
+पिछला भुगतान: {{lastPaymentHi}}
+{{libraryName}}{{libraryAddressLineHi}}{{libraryPhoneLineHi}}
+
+कृपया जल्द से जल्द अपना भुगतान करें। धन्यवाद!`;
+
+const DEFAULT_WHATSAPP_SMS_PAIDUP = `Hi {{studentName}}, this is a reminder from {{libraryName}} — you have no pending dues at the moment.
+
+Student ID: {{studentId}}
+Joining date: {{joiningDate}}
+Seat: {{seat}}
+Last payment: {{lastPayment}}
+{{libraryName}}{{libraryAddressLine}}{{libraryPhoneLine}}
+
+Please clear your dues at your earliest convenience. Thank you!
+
+---
+
+नमस्ते {{studentName}}, यह {{libraryName}} की तरफ से एक रिमाइंडर है — आपकी कोई बकाया राशि नहीं है।
 
 स्टूडेंट आईडी: {{studentId}}
 जॉइनिंग तिथि: {{joiningDate}}
@@ -80,15 +109,20 @@ Please clear your dues at your earliest convenience. Thank you!
 // Old openEmailReminder used a different fallback ('Library') here than
 // the message body's libName ('the library') — preserved via its own
 // token rather than silently unifying the two and changing behavior for
-// a library with no name set in Settings.
+// a library with no name set in Settings. Subject text itself never
+// varied by due status before, so both variants start out identical;
+// admins can still diverge them since they're now separately editable.
 const DEFAULT_EMAIL_SUBJECT = 'Payment Reminder from {{libraryNameSubject}} / भुगतान रिमाइंडर';
-const DEFAULT_EMAIL_BODY = DEFAULT_WHATSAPP_SMS_TEMPLATE;
 
 export const DEFAULT_TEMPLATES = {
-  [REMINDER_TEMPLATE_KEYS.whatsapp]: DEFAULT_WHATSAPP_SMS_TEMPLATE,
-  [REMINDER_TEMPLATE_KEYS.sms]: DEFAULT_WHATSAPP_SMS_TEMPLATE,
-  [REMINDER_TEMPLATE_KEYS.emailSubject]: DEFAULT_EMAIL_SUBJECT,
-  [REMINDER_TEMPLATE_KEYS.emailBody]: DEFAULT_EMAIL_BODY,
+  [REMINDER_TEMPLATE_KEYS.whatsappPending]: DEFAULT_WHATSAPP_SMS_PENDING,
+  [REMINDER_TEMPLATE_KEYS.whatsappPaidUp]: DEFAULT_WHATSAPP_SMS_PAIDUP,
+  [REMINDER_TEMPLATE_KEYS.smsPending]: DEFAULT_WHATSAPP_SMS_PENDING,
+  [REMINDER_TEMPLATE_KEYS.smsPaidUp]: DEFAULT_WHATSAPP_SMS_PAIDUP,
+  [REMINDER_TEMPLATE_KEYS.emailSubjectPending]: DEFAULT_EMAIL_SUBJECT,
+  [REMINDER_TEMPLATE_KEYS.emailSubjectPaidUp]: DEFAULT_EMAIL_SUBJECT,
+  [REMINDER_TEMPLATE_KEYS.emailBodyPending]: DEFAULT_WHATSAPP_SMS_PENDING,
+  [REMINDER_TEMPLATE_KEYS.emailBodyPaidUp]: DEFAULT_WHATSAPP_SMS_PAIDUP,
 };
 
 /**
@@ -125,6 +159,8 @@ function fieldValues(info) {
     fullName, studentId, mobile, email, joiningDate, seatLabel,
     lastPaymentText, balance, dueDate, libraryName, libraryAddress, libraryPhone,
   } = info;
+  const overdue = isPastDue(dueDate);
+  const overdueDays = daysOverdue(dueDate);
   return {
     studentName: fullName || '',
     studentId: studentId || '',
@@ -137,31 +173,18 @@ function fieldValues(info) {
     lastPaymentHi: lastPaymentText || 'अभी तक कोई भुगतान नहीं हुआ',
     dueAmount: balance > 0 ? String(balance) : '0',
     dueDate: dueDate ? formatDate(dueDate) : '—',
+    daysOverdue: String(overdueDays),
     libraryName: libraryName || 'the library',
     libraryNameSubject: libraryName || 'Library',
     libraryAddress: libraryAddress || '',
     libraryPhone: libraryPhone || '',
-    daysOverdue: String(daysOverdue(dueDate)),
     // Hindi needs tense agreement that English doesn't: a due date already
-    // in the past reads naturally as "था" (was due), not "है" (is due) —
-    // isPastDue compares calendar days only, so "due today" still gets the
-    // present tense rather than being misread as already overdue. Each
-    // piece of the due-status sentence is its own token so a custom
-    // template can rearrange/drop them individually; dueLine/dueLineHi
-    // below are just that same assembly, kept as a convenience for anyone
-    // who wants the whole default sentence without composing it by hand.
-    dueVerb: isPastDue(dueDate) ? 'was' : 'is',
-    dueVerbHi: isPastDue(dueDate) ? 'था' : 'है',
-    noDuesLine: 'you have no pending dues at the moment.',
-    noDuesLineHi: 'आपकी कोई बकाया राशि नहीं है।',
-    overdueSuffix: isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : '',
-    overdueSuffixHi: isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} दिन से बकाया)` : '',
-    dueLine: balance > 0
-      ? `your due amount is ₹${balance}${dueDate ? `, due by ${formatDate(dueDate)}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} day${daysOverdue(dueDate) === 1 ? '' : 's'} overdue)` : ''}.`
-      : 'you have no pending dues at the moment.',
-    dueLineHi: balance > 0
-      ? `आपकी बकाया राशि ₹${balance} ${isPastDue(dueDate) ? 'थी' : 'है'}${dueDate ? `, जिसे ${formatDate(dueDate)} तक जमा करना ${isPastDue(dueDate) ? 'था' : 'है'}` : ''}${isPastDue(dueDate) ? ` (${daysOverdue(dueDate)} दिन से बकाया)` : ''}।`
-      : 'आपकी कोई बकाया राशि नहीं है।',
+    // in the past reads naturally as "था" (was due), not "है" (is due).
+    dueVerb: overdue ? 'was' : 'is',
+    dueVerbHi: overdue ? 'था' : 'है',
+    dueVerbHiFem: overdue ? 'थी' : 'है',
+    overdueSuffix: overdue ? ` (${overdueDays} day${overdueDays === 1 ? '' : 's'} overdue)` : '',
+    overdueSuffixHi: overdue ? ` (${overdueDays} दिन से बकाया)` : '',
     libraryAddressLine: libraryAddress ? `\nAddress: ${libraryAddress}` : '',
     libraryPhoneLine: libraryPhone ? `\nPhone: ${libraryPhone}` : '',
     libraryAddressLineHi: libraryAddress ? `\nपता: ${libraryAddress}` : '',
@@ -177,13 +200,19 @@ export function fillTemplate(template, info) {
   );
 }
 
+function pickKey(info, pendingKey, paidUpKey) {
+  return info.balance > 0 ? pendingKey : paidUpKey;
+}
+
 /**
- * Builds the WhatsApp/SMS message from the admin's saved template (or the
- * built-in default if none is saved yet). `templates` is the flat
- * {key: value} object GET /settings already returns.
+ * Builds the WhatsApp/SMS message from the admin's saved template for
+ * this student's current due status (or the matching built-in default
+ * if nothing's saved yet). `templates` is the flat {key: value} object
+ * GET /settings already returns.
  */
 export function buildReminderMessage(info, templates = {}) {
-  const template = templates[REMINDER_TEMPLATE_KEYS.whatsapp] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.whatsapp];
+  const key = pickKey(info, REMINDER_TEMPLATE_KEYS.whatsappPending, REMINDER_TEMPLATE_KEYS.whatsappPaidUp);
+  const template = templates[key] || DEFAULT_TEMPLATES[key];
   return fillTemplate(template, info);
 }
 
@@ -197,8 +226,8 @@ export function toReminderPhone(mobile) {
 export function openWhatsappReminder(info, templates = {}) {
   const phone = toReminderPhone(info.mobile);
   if (!phone) return false;
-  const template = templates[REMINDER_TEMPLATE_KEYS.whatsapp] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.whatsapp];
-  const message = fillTemplate(template, info);
+  const key = pickKey(info, REMINDER_TEMPLATE_KEYS.whatsappPending, REMINDER_TEMPLATE_KEYS.whatsappPaidUp);
+  const message = fillTemplate(templates[key] || DEFAULT_TEMPLATES[key], info);
   const url = `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
@@ -207,8 +236,8 @@ export function openWhatsappReminder(info, templates = {}) {
 export function openSmsReminder(info, templates = {}) {
   const phone = toReminderPhone(info.mobile);
   if (!phone) return false;
-  const template = templates[REMINDER_TEMPLATE_KEYS.sms] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.sms];
-  const message = fillTemplate(template, info);
+  const key = pickKey(info, REMINDER_TEMPLATE_KEYS.smsPending, REMINDER_TEMPLATE_KEYS.smsPaidUp);
+  const message = fillTemplate(templates[key] || DEFAULT_TEMPLATES[key], info);
   const separator = /iPhone|iPad|iPod/.test(navigator.userAgent) ? '&' : '?';
   window.location.href = `sms:+${phone}${separator}body=${encodeURIComponent(message)}`;
   return true;
@@ -216,10 +245,10 @@ export function openSmsReminder(info, templates = {}) {
 
 export function openEmailReminder(info, templates = {}) {
   if (!info.email) return false;
-  const subjectTemplate = templates[REMINDER_TEMPLATE_KEYS.emailSubject] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.emailSubject];
-  const bodyTemplate = templates[REMINDER_TEMPLATE_KEYS.emailBody] || DEFAULT_TEMPLATES[REMINDER_TEMPLATE_KEYS.emailBody];
-  const subject = fillTemplate(subjectTemplate, info);
-  const message = fillTemplate(bodyTemplate, info);
+  const subjectKey = pickKey(info, REMINDER_TEMPLATE_KEYS.emailSubjectPending, REMINDER_TEMPLATE_KEYS.emailSubjectPaidUp);
+  const bodyKey = pickKey(info, REMINDER_TEMPLATE_KEYS.emailBodyPending, REMINDER_TEMPLATE_KEYS.emailBodyPaidUp);
+  const subject = fillTemplate(templates[subjectKey] || DEFAULT_TEMPLATES[subjectKey], info);
+  const message = fillTemplate(templates[bodyKey] || DEFAULT_TEMPLATES[bodyKey], info);
   window.location.href = `mailto:${info.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(message)}`;
   return true;
 }

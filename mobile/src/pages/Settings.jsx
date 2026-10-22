@@ -465,10 +465,29 @@ export default function Settings() {
   );
 }
 
+// Each channel now has two variants — the message sent while a balance is
+// still due, and the one sent once the student is fully paid up — picked
+// automatically by reminders.js based on that student's balance at send
+// time, since plain {{token}} substitution can't express "say X if owing,
+// Y if not" within a single template.
 const REMINDER_CHANNELS = [
-  { key: REMINDER_TEMPLATE_KEYS.whatsapp, label: 'WhatsApp message' },
-  { key: REMINDER_TEMPLATE_KEYS.sms, label: 'SMS message' },
-  { key: REMINDER_TEMPLATE_KEYS.emailBody, label: 'Email body', subjectKey: REMINDER_TEMPLATE_KEYS.emailSubject },
+  {
+    label: 'WhatsApp message',
+    pendingKey: REMINDER_TEMPLATE_KEYS.whatsappPending,
+    paidUpKey: REMINDER_TEMPLATE_KEYS.whatsappPaidUp,
+  },
+  {
+    label: 'SMS message',
+    pendingKey: REMINDER_TEMPLATE_KEYS.smsPending,
+    paidUpKey: REMINDER_TEMPLATE_KEYS.smsPaidUp,
+  },
+  {
+    label: 'Email',
+    pendingKey: REMINDER_TEMPLATE_KEYS.emailBodyPending,
+    paidUpKey: REMINDER_TEMPLATE_KEYS.emailBodyPaidUp,
+    subjectPendingKey: REMINDER_TEMPLATE_KEYS.emailSubjectPending,
+    subjectPaidUpKey: REMINDER_TEMPLATE_KEYS.emailSubjectPaidUp,
+  },
 ];
 
 /** Shown from "+ Add field" — inserts the clicked field's {{token}} into the textarea at the last known cursor position. */
@@ -497,7 +516,7 @@ function FieldPickerDrawer({ onPick, onClose }) {
 }
 
 /** One channel's editable template: a textarea (plus subject field for email), an "+ Add field" picker, and a live preview using sample data. */
-function TemplateEditor({ label, value, subjectValue, onChangeBody, onChangeSubject }) {
+function TemplateEditor({ label, value, subjectValue, onChangeBody, onChangeSubject, dueStatus }) {
   const textareaRef = useRef(null);
   const [showPicker, setShowPicker] = useState(false);
   // Tracks which field (body vs subject) the picker should insert into —
@@ -540,7 +559,7 @@ function TemplateEditor({ label, value, subjectValue, onChangeBody, onChangeSubj
   const sampleInfo = {
     fullName: 'Rahul Kumar', studentId: 'LIB-2026-0001', mobile: '9999999999', email: 'rahul@example.com',
     joiningDate: '2026-08-01', seatLabel: 'Floor 1, Seat 12 (06:00 – 12:00)', lastPaymentText: '₹1000 on 1 August 2026 (Receipt RCPT-2026-0001)',
-    balance: 1000, dueDate: '2026-09-01', libraryName: 'Pilaan Library', libraryAddress: '123 MG Road, Pune', libraryPhone: '+91 98765 43210',
+    balance: dueStatus === 'paidUp' ? 0 : 1000, dueDate: '2026-09-01', libraryName: 'Pilaan Library', libraryAddress: '123 MG Road, Pune', libraryPhone: '+91 98765 43210',
   };
 
   return (
@@ -604,18 +623,29 @@ function ReminderTemplatesSettings({ settings, set, saving, onSave }) {
       <h3>Payment reminder templates</h3>
       <p style={{ fontSize: 13, color: 'var(--color-ink-soft)', marginTop: 0 }}>
         Customize the message sent when an admin clicks "Send reminder" on a student's profile or the seat map.
-        Click "+ Add field" to insert a student's data (name, due amount, etc.) — it's filled in automatically for
-        each student when the reminder is sent.
+        Each channel has two versions — one sent while a balance is still due, another once the student is fully
+        paid up — picked automatically based on that student's balance. Click "+ Add field" to insert a student's
+        data (name, due amount, days overdue, etc.) — it's filled in automatically when the reminder is sent.
       </p>
       {REMINDER_CHANNELS.map((channel) => (
-        <TemplateEditor
-          key={channel.key}
-          label={channel.label}
-          value={settings[channel.key] ?? DEFAULT_TEMPLATES[channel.key]}
-          subjectValue={channel.subjectKey ? (settings[channel.subjectKey] ?? DEFAULT_TEMPLATES[channel.subjectKey]) : undefined}
-          onChangeBody={(v) => set(channel.key, v)}
-          onChangeSubject={channel.subjectKey ? (v) => set(channel.subjectKey, v) : undefined}
-        />
+        <div key={channel.pendingKey} style={{ marginBottom: 12 }}>
+          <TemplateEditor
+            label={`${channel.label} — while a balance is due`}
+            value={settings[channel.pendingKey] ?? DEFAULT_TEMPLATES[channel.pendingKey]}
+            subjectValue={channel.subjectPendingKey ? (settings[channel.subjectPendingKey] ?? DEFAULT_TEMPLATES[channel.subjectPendingKey]) : undefined}
+            onChangeBody={(v) => set(channel.pendingKey, v)}
+            onChangeSubject={channel.subjectPendingKey ? (v) => set(channel.subjectPendingKey, v) : undefined}
+            dueStatus="pending"
+          />
+          <TemplateEditor
+            label={`${channel.label} — once fully paid up`}
+            value={settings[channel.paidUpKey] ?? DEFAULT_TEMPLATES[channel.paidUpKey]}
+            subjectValue={channel.subjectPaidUpKey ? (settings[channel.subjectPaidUpKey] ?? DEFAULT_TEMPLATES[channel.subjectPaidUpKey]) : undefined}
+            onChangeBody={(v) => set(channel.paidUpKey, v)}
+            onChangeSubject={channel.subjectPaidUpKey ? (v) => set(channel.subjectPaidUpKey, v) : undefined}
+            dueStatus="paidUp"
+          />
+        </div>
       ))}
       <button className="btn btn-primary" disabled={saving} onClick={onSave}>
         {saving ? 'Saving…' : 'Save templates'}

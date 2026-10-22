@@ -56,9 +56,18 @@ describe('buildReminderMessage', () => {
   });
 
   test('uses the admin-saved WhatsApp template when present', () => {
-    const templates = { [REMINDER_TEMPLATE_KEYS.whatsapp]: 'Yo {{studentName}}, pay up: ₹{{dueAmount}}' };
+    const templates = { [REMINDER_TEMPLATE_KEYS.whatsappPending]: 'Yo {{studentName}}, pay up: ₹{{dueAmount}}' };
     const message = buildReminderMessage(info, templates);
     expect(message).toBe('Yo Rahul Kumar, pay up: ₹500');
+  });
+
+  test('uses the paid-up template instead when the student has no balance due', () => {
+    const templates = {
+      [REMINDER_TEMPLATE_KEYS.whatsappPending]: 'You owe ₹{{dueAmount}}',
+      [REMINDER_TEMPLATE_KEYS.whatsappPaidUp]: 'All paid up, {{studentName}}!',
+    };
+    const message = buildReminderMessage({ ...info, balance: 0 }, templates);
+    expect(message).toBe('All paid up, Rahul Kumar!');
   });
 });
 
@@ -74,7 +83,7 @@ describe('openWhatsappReminder', () => {
   });
 
   test('uses the custom saved template, not the built-in default', () => {
-    const templates = { [REMINDER_TEMPLATE_KEYS.whatsapp]: 'Custom: {{studentName}} owes {{dueAmount}}' };
+    const templates = { [REMINDER_TEMPLATE_KEYS.whatsappPending]: 'Custom: {{studentName}} owes {{dueAmount}}' };
     openWhatsappReminder(info, templates);
     const url = window.open.mock.calls[0][0];
     expect(decodeURIComponent(url)).toContain('Custom: Rahul Kumar owes 500');
@@ -87,8 +96,8 @@ describe('openSmsReminder', () => {
     delete window.location;
     window.location = { href: '' };
     const templates = {
-      [REMINDER_TEMPLATE_KEYS.whatsapp]: 'WHATSAPP VERSION {{studentName}}',
-      [REMINDER_TEMPLATE_KEYS.sms]: 'SMS VERSION {{studentName}}',
+      [REMINDER_TEMPLATE_KEYS.whatsappPending]: 'WHATSAPP VERSION {{studentName}}',
+      [REMINDER_TEMPLATE_KEYS.smsPending]: 'SMS VERSION {{studentName}}',
     };
     openSmsReminder(info, templates);
     const url = decodeURIComponent(window.location.href);
@@ -104,8 +113,8 @@ describe('openEmailReminder', () => {
     delete window.location;
     window.location = { href: '' };
     const templates = {
-      [REMINDER_TEMPLATE_KEYS.emailSubject]: 'Reminder for {{studentName}}',
-      [REMINDER_TEMPLATE_KEYS.emailBody]: 'Dear {{studentName}}, you owe {{dueAmount}}.',
+      [REMINDER_TEMPLATE_KEYS.emailSubjectPending]: 'Reminder for {{studentName}}',
+      [REMINDER_TEMPLATE_KEYS.emailBodyPending]: 'Dear {{studentName}}, you owe {{dueAmount}}.',
     };
     openEmailReminder(info, templates);
     const url = decodeURIComponent(window.location.href);
@@ -117,6 +126,23 @@ describe('openEmailReminder', () => {
   test('returns false when the student has no email', () => {
     const result = openEmailReminder({ ...info, email: '' }, {});
     expect(result).toBe(false);
+  });
+
+  test('uses the paid-up subject/body templates once the student has no balance due', () => {
+    const originalLocation = window.location;
+    delete window.location;
+    window.location = { href: '' };
+    const templates = {
+      [REMINDER_TEMPLATE_KEYS.emailSubjectPending]: 'You owe us, {{studentName}}',
+      [REMINDER_TEMPLATE_KEYS.emailSubjectPaidUp]: 'Thanks, {{studentName}}!',
+      [REMINDER_TEMPLATE_KEYS.emailBodyPending]: 'Please pay ₹{{dueAmount}}.',
+      [REMINDER_TEMPLATE_KEYS.emailBodyPaidUp]: 'You are all paid up.',
+    };
+    openEmailReminder({ ...info, balance: 0 }, templates);
+    const url = decodeURIComponent(window.location.href);
+    expect(url).toContain('subject=Thanks, Rahul Kumar!');
+    expect(url).toContain('You are all paid up.');
+    window.location = originalLocation;
   });
 });
 
