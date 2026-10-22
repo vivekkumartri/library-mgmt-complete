@@ -24,7 +24,24 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 *
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: env.frontendUrl, credentials: true }));
+// The mobile app (Capacitor) is served from a fixed native-shell origin
+// rather than the web frontend's own domain — Android's WebView uses
+// https://localhost, iOS uses capacitor://localhost, and a local native
+// dev build may still be plain http://localhost. Allow those alongside
+// the configured web frontend origin.
+const allowedOrigins = new Set([
+  env.frontendUrl,
+  'capacitor://localhost',
+  'http://localhost',
+  'https://localhost',
+]);
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.has(origin)) return callback(null, true);
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+}));
 app.use(express.json({ limit: '5mb' }));
 app.use(cookieParser());
 app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));

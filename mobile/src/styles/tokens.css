@@ -1,0 +1,91 @@
+:root {
+  /* Palette — a reading-lamp teal against warm paper, not the default
+     terracotta/cream or near-black+neon combos. */
+  --color-bg: #F7F5F0;
+  --color-surface: #FFFFFF;
+  --color-surface-sunken: #EFEBE2;
+  --color-ink: #21261F;
+  --color-ink-soft: #5B6158;
+  --color-border: #E1DCD0;
+
+  --color-primary: #0F5C56;
+  --color-primary-dark: #0A403C;
+  --color-primary-soft: #E3EFEC;
+
+  --color-accent: #C77B3B; /* warm amber for highlights/badges — used sparingly */
+
+  --color-success: #1E7A45;
+  --color-success-soft: #E4F3E8;
+  --color-warning: #9A6B12;
+  --color-warning-soft: #FBF1DA;
+  --color-danger: #B23A34;
+  --color-danger-soft: #FAE7E5;
+  --color-info: #2B5F8A;
+  --color-info-soft: #E6EEF4;
+  /* Seat map payment-urgency tier, distinct from --color-warning (used for
+     structural "shared seat" state) and --color-danger (used for
+     scheduling conflicts) so the two kinds of alert never look identical. */
+  --color-due-today: #C25E1B;
+  --color-due-today-soft: #FBEADD;
+
+  --font-display: "Source Serif 4", Georgia, serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 14px;
+  --radius-lg: 22px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --shadow-card: 0 1px 2px rgba(33, 38, 31, 0.06), 0 4px 12px rgba(33, 38, 31, 0.06);
+  --shadow-modal: 0 12px 40px rgba(33, 38, 31, 0.22);
+
+  --nav-height: 64px;
+  --touch-target: 44px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0 0 var(--space-2) 0;
+  letter-spacing: -0.01em;
+}
+
+button, input, select, textarea {
+  font-family: inherit;
+  font-size: 16px; /* prevents iOS zoom-on-focus */
+}
+
+button {
+  cursor: pointer;
+}
+
+a { color: var(--color-primary); }
+
+:focus-visible {
+  outline: 3px solid var(--color-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+}

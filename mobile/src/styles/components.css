@@ -1,0 +1,553 @@
+.app-shell {
+  display: flex;
+  min-height: 100%;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-4);
+  padding-bottom: calc(var(--nav-height) + var(--space-4));
+}
+
+@media (min-width: 900px) {
+  .app-main {
+    padding: var(--space-6);
+    padding-bottom: var(--space-6);
+  }
+}
+
+.sidebar {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .sidebar {
+    display: flex;
+    flex-direction: column;
+    width: 240px;
+    background: var(--color-surface);
+    border-right: 1px solid var(--color-border);
+    padding: var(--space-5) var(--space-3);
+    gap: var(--space-1);
+  }
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--nav-height);
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 20;
+}
+
+@media (min-width: 900px) {
+  .bottom-nav { display: none; }
+}
+
+.bottom-nav a, .nav-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--color-ink-soft);
+  text-decoration: none;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
+.nav-link {
+  flex-direction: row;
+  justify-content: flex-start;
+  font-size: 14px;
+  gap: var(--space-2);
+  width: 100%;
+}
+
+.bottom-nav a.active, .nav-link.active {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.bottom-nav-more-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--color-ink-soft);
+  background: none;
+  border: none;
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+}
+
+.more-sheet .nav-link {
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+}
+
+.card {
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4);
+}
+
+.card-grid {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 640px) {
+  .card-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+  .card-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .card-grid.cols-4 { grid-template-columns: repeat(4, 1fr); }
+}
+
+.stat-label {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.stat-value {
+  font-size: 28px;
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin-top: 2px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-4);
+  height: var(--touch-target);
+  font-weight: 600;
+  font-size: 14px;
+  background: var(--color-surface-sunken);
+  color: var(--color-ink);
+}
+
+.btn-primary { background: var(--color-primary); color: white; }
+.btn-primary:hover { background: var(--color-primary-dark); }
+.btn-danger { background: var(--color-danger); color: white; }
+.btn-danger-outline { background: transparent; border: 1px solid var(--color-danger); color: var(--color-danger); }
+.btn-outline { background: transparent; border: 1px solid var(--color-border); }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.input, select.input, textarea.input {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  height: var(--touch-target);
+  padding: 0 var(--space-3);
+  background: var(--color-surface);
+  color: var(--color-ink);
+}
+
+textarea.input { height: auto; padding: var(--space-3); }
+
+.field { display: flex; flex-direction: column; gap: 6px; margin-bottom: var(--space-3); }
+.field label { font-size: 13px; font-weight: 600; color: var(--color-ink-soft); }
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+.badge-success { background: var(--color-success-soft); color: var(--color-success); }
+.badge-warning { background: var(--color-warning-soft); color: var(--color-warning); }
+.badge-danger { background: var(--color-danger-soft); color: var(--color-danger); }
+.badge-info { background: var(--color-info-soft); color: var(--color-info); }
+.badge-neutral { background: var(--color-surface-sunken); color: var(--color-ink-soft); }
+
+.seat-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols, 4), 1fr);
+  gap: var(--space-2);
+}
+
+/* ---- Seat map chrome: legend, toolbar, summary strip ---- */
+
+.seat-legend-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.seat-legend-row {
+  display: flex;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.seat-legend-row-payment {
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
+}
+
+.seat-legend-caption {
+  font-size: 13px;
+  color: var(--color-ink-soft);
+}
+
+.seat-legend-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--color-ink);
+}
+
+.seat-toolbar {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.seat-search-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--color-surface-sunken);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 0 10px;
+  height: 36px;
+  min-width: 180px;
+}
+
+.seat-search-input {
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14px;
+  width: 100%;
+  color: var(--color-ink);
+}
+
+.seat-filter-pills {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  background: var(--color-surface-sunken);
+  border-radius: var(--radius-sm);
+  padding: 3px;
+}
+
+.seat-filter-pill {
+  border: none;
+  background: transparent;
+  color: var(--color-ink-soft);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+}
+
+.seat-filter-pill.is-active {
+  background: var(--color-surface);
+  color: var(--color-primary);
+  box-shadow: var(--shadow-card);
+}
+
+.seat-zoom-controls {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-left: auto;
+}
+
+.seat-summary-strip {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+}
+
+.seat-summary-stat {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.seat-summary-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.seat-summary-label {
+  font-size: 12px;
+  color: var(--color-ink-soft);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.seat-summary-value {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+/* Floors with rows of different widths render as one flex row per row,
+   each holding that row's own seat count — a single CSS grid can't do
+   this since it needs one column count for every row. */
+.seat-map-rows {
+  display: flex;
+  flex-direction: column;
+  /* Bigger than --space-2 so a seat's own bottom "3D edge" shadow (drawn
+     ~8px below the block) has clear room above the next row instead of
+     visually merging into it. */
+  gap: var(--space-4);
+}
+
+.seat-map-row {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.seat-map-row .seat-cell {
+  width: var(--seat-cell-size, 78px);
+  flex: 0 0 auto;
+}
+
+/* An occupied seat's card holds two labeled buttons side by side (or a
+   headcount note) — noticeably wider than a bare available/disabled square
+   so "Present"/"Absent" never clip or overlap. */
+.seat-map-row .seat-cell.has-occupant {
+  width: var(--seat-cell-size-occupied, 106px);
+}
+
+/* "3D block" look: a raised keycap/tile rendered with layered shadows
+   instead of a 3D scene/library — a solid bottom+right "edge" plus a subtle
+   top-left highlight gives each seat real depth at a fraction of the cost
+   (and risk) of an actual 3D engine. Pressing a seat (:active) flattens it
+   toward its base color, like a physical button being pushed in. */
+.seat-cell {
+  aspect-ratio: 1;
+  border-radius: var(--radius-sm);
+  border: 1.5px solid var(--color-border);
+  background: var(--color-surface);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-weight: 700;
+  font-size: 15px;
+  min-height: var(--seat-cell-size, 78px);
+  padding: 6px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.5),
+    inset 0 -3px 0 rgba(0, 0, 0, 0.08),
+    0 4px 0 var(--seat-block-edge, var(--color-border)),
+    0 6px 7px rgba(0, 0, 0, 0.12);
+  transform: translateY(0);
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.seat-cell:active {
+  transform: translateY(3px);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.08),
+    0 1px 0 var(--seat-block-edge, var(--color-border)),
+    0 2px 3px rgba(0, 0, 0, 0.12);
+}
+
+/* An occupied/shared seat shows its due date and (for a single occupant)
+   quick attendance buttons, so it needs more room than a plain square —
+   available/disabled seats stay compact squares. */
+.seat-cell.has-occupant {
+  aspect-ratio: auto;
+  min-height: 133px;
+  justify-content: flex-start;
+  padding-top: 10px;
+}
+
+.seat-number-btn {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  padding: 3px 9px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.seat-number-btn:hover {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.seat-number-label {
+  line-height: 1;
+}
+
+.seat-due-date {
+  font-size: 10px;
+  font-weight: 400;
+  color: var(--color-ink-soft);
+  text-align: center;
+  line-height: 1.2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+}
+
+.seat-quick-attendance {
+  display: flex;
+  gap: 4px;
+  margin-top: 3px;
+  width: 100%;
+  justify-content: center;
+}
+
+.seat-quick-btn {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-ink);
+  border-radius: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 3px 6px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.seat-quick-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.seat-quick-btn.is-present {
+  background: var(--color-success);
+  border-color: var(--color-success);
+  color: white;
+}
+
+.seat-quick-btn.is-absent {
+  background: var(--color-danger);
+  border-color: var(--color-danger);
+  color: white;
+}
+
+.seat-quick-note {
+  font-size: 9px;
+  font-weight: 400;
+  color: var(--color-ink-soft);
+}
+
+/* --seat-block-edge feeds the 3D block's bottom "edge" shadow above, so
+   each status/urgency's raised block is tinted to match its own color
+   instead of a flat gray edge on every seat regardless of state. */
+.seat-cell.available { border-color: var(--color-success); --seat-block-edge: var(--color-success); }
+.seat-cell.occupied { border-color: var(--color-info); background: var(--color-info-soft); --seat-block-edge: var(--color-info); }
+.seat-cell.partial { border-color: var(--color-warning); background: var(--color-warning-soft); --seat-block-edge: var(--color-warning); }
+.seat-cell.disabled { border-color: var(--color-border); background: var(--color-surface-sunken); color: var(--color-ink-soft); opacity: 0.7; --seat-block-edge: var(--color-border); }
+.seat-cell.conflict { border-color: var(--color-danger); background: var(--color-danger-soft); --seat-block-edge: var(--color-danger); }
+
+/* Payment-urgency tiers for an occupied/shared seat — override the plain
+   occupied/partial fill above; declared after it so these win at equal
+   specificity. Never applied to available/disabled/conflict seats (see
+   seatColorClass in SeatMap.jsx) so a scheduling conflict's red always
+   means "double-booked", not "payment overdue". */
+.seat-cell.urgency-due_soon { border-color: var(--color-warning); background: var(--color-warning-soft); --seat-block-edge: var(--color-warning); }
+.seat-cell.urgency-due_today { border-color: var(--color-due-today); background: var(--color-due-today-soft); --seat-block-edge: var(--color-due-today); }
+.seat-cell.urgency-overdue { border-color: var(--color-danger); background: var(--color-danger-soft); --seat-block-edge: var(--color-danger); }
+
+.drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(33, 38, 31, 0.35);
+  z-index: 30;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+@media (min-width: 640px) {
+  .drawer-backdrop { align-items: center; }
+}
+
+.drawer {
+  background: var(--color-surface);
+  width: 100%;
+  max-width: 480px;
+  max-height: 88vh;
+  overflow-y: auto;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  box-shadow: var(--shadow-modal);
+  padding: var(--space-5);
+}
+
+@media (min-width: 640px) {
+  .drawer { border-radius: var(--radius-lg); }
+}
+
+.empty-state, .error-state {
+  text-align: center;
+  padding: var(--space-6) var(--space-4);
+  color: var(--color-ink-soft);
+}
+
+.error-state { color: var(--color-danger); }
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-4);
+  gap: var(--space-3);
+  flex-wrap: wrap;
+}
+
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--color-border);
+  gap: var(--space-3);
+}
+
+.list-item:last-child { border-bottom: none; }

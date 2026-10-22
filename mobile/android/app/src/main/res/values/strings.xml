@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Library Management</string>
+    <string name="title_activity_main">Library Management</string>
+    <string name="package_name">com.pilaan.librarymgmt</string>
+    <string name="custom_url_scheme">com.pilaan.librarymgmt</string>
+</resources>
