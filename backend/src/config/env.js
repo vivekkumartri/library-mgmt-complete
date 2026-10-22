@@ -41,6 +41,22 @@ module.exports = {
     cron: process.env.BACKUP_CRON || '0 2 * * *', // default: daily at 02:00
   },
 
+  push: {
+    // Off by default — turn on with PUSH_ENABLED=true once a Firebase
+    // service account is configured. Separate from the Google Sheets
+    // service account above (google.*) — this is a Firebase project's
+    // own key, used only for sending FCM pushes, never for Sheets/Drive.
+    enabled: process.env.PUSH_ENABLED === 'true',
+    projectId: process.env.FIREBASE_PROJECT_ID,
+    clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+    privateKey: process.env.FIREBASE_PRIVATE_KEY
+      ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+      : undefined,
+    // Daily payment-due-reminder push run. Same "host can sleep" caveat
+    // as BACKUP_CRON — see render.yaml and scripts/runPaymentReminders.js.
+    reminderCron: process.env.PUSH_REMINDER_CRON || '0 9 * * *', // default: daily at 09:00
+  },
+
   defaults: {
     studentIdPrefix: process.env.STUDENT_ID_PREFIX || 'LIB',
     receiptPrefix: process.env.RECEIPT_PREFIX || 'RCPT',
@@ -54,5 +70,9 @@ module.exports = {
     return Boolean(
       this.google.clientEmail && this.google.privateKey && this.google.spreadsheetId
     );
+  },
+
+  get pushConfigured() {
+    return Boolean(this.push.projectId && this.push.clientEmail && this.push.privateKey);
   },
 };

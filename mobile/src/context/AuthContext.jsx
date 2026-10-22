@@ -4,6 +4,7 @@ import {
   biometricsSupported, isBiometricAvailable, hasStoredBiometricLogin,
   enableBiometricLogin, disableBiometricLogin, unlockWithBiometrics,
 } from '../utils/biometricAuth';
+import { registerForPushNotifications, unregisterPushNotifications } from '../utils/pushNotifications';
 
 const AuthContext = createContext(null);
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }) {
         if (!res.data?.user) throw new Error('Malformed /auth/me response');
         setUser(res.data.user);
         localStorage.setItem('lib_user', JSON.stringify(res.data.user));
+        registerForPushNotifications();
       })
       .catch(() => {
         localStorage.removeItem('lib_token');
@@ -92,6 +94,7 @@ export function AuthProvider({ children }) {
     localStorage.setItem('lib_token', token);
     localStorage.setItem('lib_user', JSON.stringify({ ...userData, type: userData.role ? 'admin' : 'student' }));
     setUser({ ...userData, type: userData.role ? 'admin' : 'student' });
+    registerForPushNotifications();
   }
 
   async function logout() {
@@ -104,6 +107,7 @@ export function AuthProvider({ children }) {
     }
     currentRefreshTokenRef.current = null;
     await disableBiometricLogin();
+    await unregisterPushNotifications();
     setHasBiometricsEnabled(false);
     localStorage.removeItem('lib_token');
     localStorage.removeItem('lib_user');

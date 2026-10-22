@@ -18,6 +18,7 @@ const dashboardRoutes = require('./routes/dashboardRoutes');
 const { expensesRouter, noticesRouter, settingsRouter, adminsRouter } = require('./routes/miscRoutes');
 const backupRoutes = require('./routes/backupRoutes');
 const roleRoutes = require('./routes/roleRoutes');
+const pushRoutes = require('./routes/pushRoutes');
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
@@ -67,6 +68,7 @@ app.use('/api/settings', settingsRouter);
 app.use('/api/admins', adminsRouter);
 app.use('/api/roles', roleRoutes);
 app.use('/api/backup', backupRoutes);
+app.use('/api/push', pushRoutes);
 app.use('/api/reports', dashboardRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 

@@ -151,6 +151,18 @@ const SHEETS = {
     'status', // active | revoked
     'created_at', 'expires_at', 'last_used_at',
   ],
+
+  // FCM device tokens for the mobile app's push notifications (currently
+  // only students, for payment-due reminders) — one row per
+  // device/install, not per student, since the same student can be
+  // logged in on more than one device. registered_at is bumped (not a
+  // fresh row created) when the same device re-registers with an
+  // unchanged token, so this never silently grows unbounded across
+  // ordinary app restarts.
+  Device_Tokens: [
+    'device_token_id', 'owner_type', 'owner_id', 'fcm_token', 'platform', // android | ios
+    'registered_at', 'last_notified_at',
+  ],
 };
 
 module.exports = { SHEETS };

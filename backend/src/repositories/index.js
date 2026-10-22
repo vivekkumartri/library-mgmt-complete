@@ -21,6 +21,7 @@ const repos = {
   auditLog: new BaseRepository('Audit_Log', 'log_id'),
   settings: new BaseRepository('Settings', 'key'),
   refreshTokens: new BaseRepository('Refresh_Tokens', 'token_id'),
+  deviceTokens: new BaseRepository('Device_Tokens', 'device_token_id'),
 };
 
 /**

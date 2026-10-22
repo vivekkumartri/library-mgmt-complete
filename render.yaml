@@ -44,6 +44,19 @@ services:
       # instance from sleeping, so the 2am backup actually runs.
       - key: BACKUP_ENABLED
         value: "true"
+      # Daily payment-due push reminders to students (mobile app). Off
+      # until a Firebase project is set up — set PUSH_ENABLED=true and
+      # fill in the FIREBASE_* values (a Firebase service account, not
+      # the Google Sheets one above) once ready. Same sleeping-instance
+      # caveat as BACKUP_ENABLED.
+      - key: PUSH_ENABLED
+        value: "false"
+      - key: FIREBASE_PROJECT_ID
+        sync: false
+      - key: FIREBASE_CLIENT_EMAIL
+        sync: false
+      - key: FIREBASE_PRIVATE_KEY
+        sync: false
 
   # ---- Frontend (static site) ----
   - type: web

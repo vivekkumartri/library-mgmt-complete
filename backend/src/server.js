@@ -3,6 +3,7 @@ const app = require('./app');
 const env = require('./config/env');
 const backupService = require('./services/backupService');
 const attendanceRetentionService = require('./services/attendanceRetentionService');
+const pushService = require('./services/pushService');
 
 // In-process scheduled backups (section 45). This is a convenience for
 // deployments that keep the web process running continuously. For hosts
@@ -38,6 +39,26 @@ cron.schedule('0 3 * * *', () => {
     console.error('[attendance-retention] scheduled purge failed:', err.message);
   });
 });
+
+// Daily payment-due push reminders to students (section: mobile app push
+// notifications). Off unless Firebase credentials are configured, same
+// opt-in pattern as backups — see env.push and scripts/runPaymentReminders.js
+// for the "host can sleep" external-scheduler alternative.
+if (env.push.enabled) {
+  if (!cron.validate(env.push.reminderCron)) {
+    // eslint-disable-next-line no-console
+    console.warn(`[startup] PUSH_REMINDER_CRON "${env.push.reminderCron}" is not a valid cron expression; payment-due push reminders are disabled.`);
+  } else {
+    cron.schedule(env.push.reminderCron, () => {
+      pushService.sendPaymentDueReminders().catch((err) => {
+        // eslint-disable-next-line no-console
+        console.error('[push] scheduled payment-due reminder run failed:', err.message);
+      });
+    });
+    // eslint-disable-next-line no-console
+    console.log(`[startup] Scheduled payment-due push reminders enabled (${env.push.reminderCron}).`);
+  }
+}
 
 if (!env.googleConfigured) {
   // eslint-disable-next-line no-console

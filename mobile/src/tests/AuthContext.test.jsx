@@ -18,6 +18,12 @@ const biometricMocks = vi.hoisted(() => ({
 }));
 vi.mock('../utils/biometricAuth', () => biometricMocks);
 
+const pushMocks = vi.hoisted(() => ({
+  registerForPushNotifications: vi.fn(async () => {}),
+  unregisterPushNotifications: vi.fn(async () => {}),
+}));
+vi.mock('../utils/pushNotifications', () => pushMocks);
+
 import api from '../services/api';
 
 function Probe() {
@@ -62,6 +68,15 @@ describe('AuthContext — session persistence', () => {
     expect(localStorage.getItem('lib_token')).toBe('jwt-1');
     expect(JSON.parse(localStorage.getItem('lib_user')).id).toBe('admin-1');
   });
+
+  test('registers this device for push notifications after a successful login', async () => {
+    api.post.mockResolvedValueOnce({ data: { token: 'jwt-1', user: { id: 'admin-1', role: 'staff' } } });
+    renderProbe();
+
+    fireEvent.click(screen.getByText('login'));
+
+    await waitFor(() => expect(pushMocks.registerForPushNotifications).toHaveBeenCalled());
+  });
 });
 
 describe('AuthContext — biometric unlock', () => {
@@ -102,6 +117,7 @@ describe('AuthContext — logout', () => {
     await waitFor(() => expect(api.post).toHaveBeenCalledWith('/auth/logout', { refreshToken: 'rt-1' }));
     await waitFor(() => expect(screen.getByTestId('user').textContent).toBe('none'));
     expect(biometricMocks.disableBiometricLogin).toHaveBeenCalled();
+    expect(pushMocks.unregisterPushNotifications).toHaveBeenCalled();
     expect(localStorage.getItem('lib_token')).toBeNull();
   });
 
