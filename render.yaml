@@ -5,7 +5,7 @@ services:
     runtime: node
     plan: free
     rootDir: backend
-    buildCommand: npm install
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:
@@ -50,7 +50,7 @@ services:
     name: library-mgmt-frontend
     runtime: static
     rootDir: frontend
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     staticPublishPath: dist
     envVars:
       - key: VITE_API_BASE_URL
